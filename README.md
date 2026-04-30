@@ -293,6 +293,12 @@ data/                        # Seed datasets + generated ledger files
   ingested_events.jsonl      # (created at runtime)
   ledger/                    # Audit ledger volume mount
 
+manual/                      # Operator manuals (technical, training, technology whitepaper)
+  README.md
+  technical-manual.md
+  training-manual-new-users.md
+  whitepaper-technologies.md
+
 docs/
   llm_teacher_student.md
   traffic_anomaly.md
