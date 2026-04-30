@@ -1,0 +1,13 @@
+{
+  "round": 1,
+  "expected_clients": [
+    "client_a",
+    "client_b",
+    "client_c"
+  ],
+  "received_updates": [
+    "client_a",
+    "client_b"
+  ],
+  "status": "collecting"
+}

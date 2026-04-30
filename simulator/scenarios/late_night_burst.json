@@ -1,0 +1,50 @@
+{
+  "scenario_id": "late_night_burst",
+  "description": "Late-night suspicious burst used to discuss staffing limits and queue management in small SOCs.",
+  "events": [
+    {
+      "event_id": "evt-3801",
+      "payload": {
+        "user_id": "student381",
+        "email": "student381@example.edu",
+        "source": "email_gateway",
+        "message": "URGENT: Your account will be suspended tonight unless you verify immediately at http://fake-night.example",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3802",
+      "payload": {
+        "user_id": "student382",
+        "email": "student382@example.edu",
+        "source": "email_gateway",
+        "message": "Immediate password update required before midnight.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3803",
+      "payload": {
+        "user_id": "student383",
+        "email": "student383@example.edu",
+        "source": "email_gateway",
+        "message": "Night library hours are extended this week.",
+        "event_type": "campus_notice",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3804",
+      "payload": {
+        "user_id": "student384",
+        "email": "student384@example.edu",
+        "source": "email_gateway",
+        "message": "Reward available after account confirmation before midnight.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    }
+  ]
+}

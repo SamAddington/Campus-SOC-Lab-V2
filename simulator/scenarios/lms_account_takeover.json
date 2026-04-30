@@ -1,0 +1,61 @@
+{
+  "scenario_id": "lms_account_takeover",
+  "description": "LMS-themed account takeover messages mixed with normal academic traffic.",
+  "events": [
+    {
+      "event_id": "evt-3101",
+      "payload": {
+        "user_id": "student311",
+        "email": "student311@example.edu",
+        "source": "lms",
+        "message": "Immediate action required: your LMS account access will expire today unless you reset your password.",
+        "event_type": "account_warning",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3102",
+      "payload": {
+        "user_id": "student312",
+        "email": "student312@example.edu",
+        "source": "lms",
+        "message": "Your chemistry lab materials have been posted.",
+        "event_type": "course_update",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3103",
+      "payload": {
+        "user_id": "student313",
+        "email": "student313@example.edu",
+        "source": "lms",
+        "message": "Click http://fake-lms-reset.example to keep your LMS account active.",
+        "event_type": "account_warning",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3104",
+      "payload": {
+        "user_id": "student314",
+        "email": "student314@example.edu",
+        "source": "lms",
+        "message": "Reminder: your discussion board reply is due tonight.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3105",
+      "payload": {
+        "user_id": "student315",
+        "email": "student315@example.edu",
+        "source": "lms",
+        "message": "Urgent LMS verification required to avoid suspension.",
+        "event_type": "account_warning",
+        "language": "en"
+      }
+    }
+  ]
+}

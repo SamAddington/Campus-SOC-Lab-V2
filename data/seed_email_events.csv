@@ -1,0 +1,11 @@
+event_id,user_email,source,event_type,timestamp,language,message
+1,student1@example.edu,email_gateway,delivery,2026-02-01T08:00:00Z,en,"Reminder: Your CIS-110 assignment is due tonight at 11:59 PM."
+2,student2@example.edu,email_gateway,suspicious_email,2026-02-01T08:15:22Z,en,"URGENT: Your campus password will expire today. Click this link to keep your account active and receive a gift card."
+3,student3@example.edu,email_gateway,delivery,2026-02-01T09:05:10Z,es,"Recordatorio: revise los materiales de la semana 3 en el aula virtual."
+4,student4@example.edu,email_gateway,suspicious_email,2026-02-01T09:45:30Z,en,"IT Support: We detected unusual activity. Reply with your username and password immediately to avoid account suspension."
+5,student5@example.edu,email_gateway,delivery,2026-02-01T10:25:47Z,vi,"Nhắc nhở: Hãy kiểm tra điểm của bạn trong hệ thống LMS."
+6,student6@example.edu,email_gateway,suspicious_email,2026-02-01T11:10:05Z,en,"Payroll Notice: You have an unclaimed bonus. Visit http://bonus-payroll.example to confirm your information."
+7,student7@example.edu,email_gateway,delivery,2026-02-01T12:40:15Z,en,"Library notice: Your borrowed book is due in 3 days."
+8,student8@example.edu,email_gateway,suspicious_email,2026-02-01T13:55:27Z,es,"AVISO URGENTE: Actualice su contraseña en este enlace para evitar la suspensión de su cuenta."
+9,student9@example.edu,email_gateway,delivery,2026-02-01T14:30:50Z,en,"Tutoring Center: Free drop-in tutoring available this week."
+10,student10@example.edu,email_gateway,suspicious_email,2026-02-01T15:05:11Z,en,"Congratulations! You have been selected for a special scholarship. Provide your bank details to receive funds immediately."

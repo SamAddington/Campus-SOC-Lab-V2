@@ -1,0 +1,59 @@
+# ----------------------------------------------------------------------------
+# OSINT endpoint allowlist.
+#
+# Every outbound HTTP request from the osint service is validated against this
+# list of (method, path-prefix) pairs before being sent. Anything not on the
+# list is rejected by `http_client.ScopedHTTP`. Extending a provider requires
+# editing this file AND the provider class -- both have to agree.
+#
+# The goal is that a reviewer can audit all external calls the service can
+# make in one place, without reading every provider's code.
+# ----------------------------------------------------------------------------
+
+version: 1
+
+providers:
+  virustotal:
+    base_url: https://www.virustotal.com
+    allow:
+      - method: GET
+        path_prefix: /api/v3/urls/
+      - method: GET
+        path_prefix: /api/v3/domains/
+      - method: GET
+        path_prefix: /api/v3/ip_addresses/
+      - method: GET
+        path_prefix: /api/v3/files/
+
+  urlhaus:
+    base_url: https://urlhaus-api.abuse.ch
+    allow:
+      - method: POST
+        path_prefix: /v1/url/
+      - method: POST
+        path_prefix: /v1/host/
+
+  abuseipdb:
+    base_url: https://api.abuseipdb.com
+    allow:
+      - method: GET
+        path_prefix: /api/v2/check
+
+  otx:
+    base_url: https://otx.alienvault.com
+    allow:
+      - method: GET
+        path_prefix: /api/v1/indicators/
+
+  phishtank:
+    base_url: https://checkurl.phishtank.com
+    allow:
+      - method: POST
+        path_prefix: /checkurl/
+
+  # openphish is a static feed we download once per TTL; no per-indicator call.
+  openphish:
+    base_url: https://openphish.com
+    allow:
+      - method: GET
+        path_prefix: /feed.txt

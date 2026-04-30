@@ -1,0 +1,61 @@
+{
+  "scenario_id": "phishing_burst",
+  "description": "Burst of suspicious email messages mixed with a few benign campus reminders.",
+  "events": [
+    {
+      "event_id": "evt-2001",
+      "payload": {
+        "user_id": "student201",
+        "email": "student201@example.edu",
+        "source": "email_gateway",
+        "message": "URGENT: Your campus password will expire today. Click http://fake-reset.example to keep your account active.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-2002",
+      "payload": {
+        "user_id": "student202",
+        "email": "student202@example.edu",
+        "source": "email_gateway",
+        "message": "Bonus gift card available after you confirm your campus account at http://fake-bonus.example",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-2003",
+      "payload": {
+        "user_id": "student203",
+        "email": "student203@example.edu",
+        "source": "lms",
+        "message": "Reminder: your biology quiz opens tomorrow at 8 AM.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-2004",
+      "payload": {
+        "user_id": "student204",
+        "email": "student204@example.edu",
+        "source": "email_gateway",
+        "message": "Immediate action required. Verify your account credentials now to avoid suspension.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-2005",
+      "payload": {
+        "user_id": "student205",
+        "email": "student205@example.edu",
+        "source": "lms",
+        "message": "Your advising appointment is confirmed for Friday at 11 AM.",
+        "event_type": "appointment_notice",
+        "language": "en"
+      }
+    }
+  ]
+}

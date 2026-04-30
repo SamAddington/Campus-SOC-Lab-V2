@@ -1,0 +1,21 @@
+message,label
+"URGENT: Your campus account will be suspended unless you verify your password immediately at http://fake-verify.example",1
+"Reminder: your online quiz opens tomorrow at 8:00 AM.",0
+"Action required: reset your password now to avoid account lockout at http://fake-reset.example",1
+"Your tutoring session has been confirmed for Thursday at 3 PM.",0
+"Verify your account immediately to keep your email active.",1
+"Discussion board reply posted in your course shell.",0
+"Password expiration notice: click http://fake-password.example to stay enrolled.",1
+"Library workshop registration is now open for next week.",0
+"Your campus mailbox quota has increased successfully.",0
+"Suspicious login detected. Confirm your account now at http://fake-alert.example",1
+"Office hours are available on Wednesday afternoon.",0
+"Immediate action required: your student portal access will expire today.",1
+"Reminder: complete your peer review by tonight.",0
+"Update your password now to avoid service interruption.",1
+"Campus wellness event starts at noon in the quad.",0
+"Your class Zoom link has been posted to Canvas.",0
+"Security alert: verify your account credentials immediately.",1
+"Assignment feedback has been released in the LMS.",0
+"Bonus reward available after you confirm your account at http://fake-bonus.example",1
+"Study group meeting moved to Friday evening.",0

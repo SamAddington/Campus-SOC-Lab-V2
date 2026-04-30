@@ -1,0 +1,61 @@
+{
+  "scenario_id": "multilingual_campaign",
+  "description": "Mixed suspicious messages in English and Spanish to test multilingual handling and fairness review.",
+  "events": [
+    {
+      "event_id": "evt-3001",
+      "payload": {
+        "user_id": "student301",
+        "email": "student301@example.edu",
+        "source": "email_gateway",
+        "message": "URGENT: Verify your campus password immediately at http://fake-verify.example",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3002",
+      "payload": {
+        "user_id": "student302",
+        "email": "student302@example.edu",
+        "source": "email_gateway",
+        "message": "URGENTE: Su cuenta será suspendida si no confirma su contraseña ahora en http://falso-reset.example",
+        "event_type": "suspicious_email",
+        "language": "es"
+      }
+    },
+    {
+      "event_id": "evt-3003",
+      "payload": {
+        "user_id": "student303",
+        "email": "student303@example.edu",
+        "source": "lms",
+        "message": "Reminder: your history essay is due Friday.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3004",
+      "payload": {
+        "user_id": "student304",
+        "email": "student304@example.edu",
+        "source": "lms",
+        "message": "Recordatorio: su tarea de matemáticas vence mañana.",
+        "event_type": "course_reminder",
+        "language": "es"
+      }
+    },
+    {
+      "event_id": "evt-3005",
+      "payload": {
+        "user_id": "student305",
+        "email": "student305@example.edu",
+        "source": "email_gateway",
+        "message": "Bonus reward available after confirming your student account now.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "scenario_id": "cross_campus_drift_case",
+  "description": "Novel suspicious pattern intended for federated-learning discussion about local novelty and shared model improvement.",
+  "events": [
+    {
+      "event_id": "evt-3601",
+      "payload": {
+        "user_id": "student361",
+        "email": "student361@example.edu",
+        "source": "email_gateway",
+        "message": "New campus identity sync required. Confirm your account token now at http://fake-sync.example",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3602",
+      "payload": {
+        "user_id": "student362",
+        "email": "student362@example.edu",
+        "source": "email_gateway",
+        "message": "Identity synchronization bonus available after account confirmation.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3603",
+      "payload": {
+        "user_id": "student363",
+        "email": "student363@example.edu",
+        "source": "lms",
+        "message": "New discussion prompt posted in political science.",
+        "event_type": "course_update",
+        "language": "en"
+      }
+    }
+  ]
+}

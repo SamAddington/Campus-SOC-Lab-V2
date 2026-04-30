@@ -1,0 +1,133 @@
+# Per-provider endpoint allowlist.
+#
+# The http_client refuses any outbound request whose path does not match one
+# of these patterns. Variables in braces (e.g. {course_id}) match a single
+# path segment. No wildcards outside braces are allowed.
+#
+# This file is the *single source of truth* for which LMS endpoints the
+# integrations service can touch. Widening it is a governance change:
+# update the corresponding docs/integrations/<provider>.md, explain why the
+# new scope is needed, and get sign-off before shipping.
+
+canvas:
+  # Canvas REST API v1. Bearer token. Read-only endpoints only.
+  allowed_paths:
+    - /api/v1/users/self
+    - /api/v1/users/self/activity_stream
+    - /api/v1/announcements
+    - /api/v1/conversations
+    - /api/v1/courses/{course_id}/discussion_topics
+  description: >
+    Canvas LMS by Instructure. We consume activity streams, announcements,
+    inbox conversations, and discussion topic listings. We never touch
+    submissions, grades, quizzes, or assignment content.
+
+blackboard:
+  # Blackboard Learn REST. OAuth2 client_credentials.
+  allowed_paths:
+    - /learn/api/v1/oauth2/token
+    - /learn/api/public/v1/announcements
+    - /learn/api/public/v1/users/{user_id}/messages
+    - /learn/api/public/v3/courses/{course_id}/messages
+  description: >
+    Blackboard Learn. We consume global announcements and per-user or
+    per-course messages. We never touch grade center, submissions, or
+    assessment content.
+
+moodle:
+  # Moodle Web Services. Token-based. Function names are enforced below
+  # instead of paths because all requests go through /webservice/rest/server.php.
+  base_endpoint: /webservice/rest/server.php
+  allowed_wsfunctions:
+    - core_webservice_get_site_info
+    - core_message_get_messages
+    - mod_forum_get_forum_discussions
+    - mod_forum_get_forum_discussion_posts
+  description: >
+    Moodle Web Services. We consume personal messages and forum posts.
+    We never call assignment, grade, or quiz web service functions.
+
+brightspace:
+  # D2L Brightspace Valence. Bearer token. Read-only news and inbox.
+  allowed_paths:
+    - /d2l/api/lp/{version}/users/whoami
+    - /d2l/api/lp/{version}/feed
+    - /d2l/api/le/{version}/{org_unit_id}/news/
+  description: >
+    D2L Brightspace. We consume the user's news feed and per-orgUnit news
+    items. We never touch grades, assignments, or quiz scores.
+
+# ---------------------------------------------------------------------------
+# Network / security connectors (opt-in)
+# ---------------------------------------------------------------------------
+
+meraki:
+  # Cisco Meraki Dashboard API (v1). API key header.
+  allowed_paths:
+    - /api/v1/organizations
+    - /api/v1/organizations/{org_id}/events
+  description: >
+    Cisco Meraki (Dashboard API). We pull organization event logs (read-only)
+    and summarize them into normalized events for the SOC pipeline.
+
+duo:
+  # Duo Admin API. Requests are signed with HMAC.
+  allowed_paths:
+    - /admin/v2/logs/authentication
+    - /admin/v2/logs/administration
+  description: >
+    Cisco Duo. We pull authentication and administration logs (read-only) using
+    HMAC-signed requests.
+
+umbrella:
+  # Cisco Umbrella Reporting API. Bearer token.
+  allowed_paths:
+    - /reports/v2/activity
+    - /reports/v2/security-activity
+  description: >
+    Cisco Umbrella. We pull recent activity / security activity reports
+    (read-only) and forward summaries downstream.
+
+ise:
+  # Cisco ISE Monitoring/ERS endpoints (deployment-specific).
+  allowed_paths:
+    - /admin/API/mnt/Session/ActiveList
+  description: >
+    Cisco ISE. We pull active session listings (read-only) for coarse signals.
+    Expand scope only with governance sign-off.
+
+firepower:
+  # Cisco Firepower Management Center (FMC) REST API (deployment-specific).
+  allowed_paths:
+    - /api/fmc_platform/v1/auth/generatetoken
+    - /api/fmc_config/v1/domain/{domain_uuid}/audit/auditrecords
+  description: >
+    Cisco Firepower FMC. We obtain an access token then pull audit records
+    (read-only) and forward summaries downstream.
+
+restconf:
+  # RESTCONF endpoints vary widely; we keep a narrow allowlist by default.
+  allowed_paths:
+    - /restconf/data/{model}
+    - /restconf/operations/{operation}
+  description: >
+    RESTCONF (generic). We allow a bounded set of RESTCONF data/operations calls.
+    Operators should keep this narrow and configure a specific model path.
+
+snmp:
+  allowed_paths: []
+  description: >
+    SNMP polling (generic). Does not use HTTP. Targets must be explicitly
+    allowlisted via SNMP_TARGETS / DEVICE_ALLOWLIST.
+
+netconf:
+  allowed_paths: []
+  description: >
+    NETCONF polling (generic). Does not use HTTP. Targets must be explicitly
+    allowlisted via NETCONF_TARGETS / DEVICE_ALLOWLIST.
+
+ssh_poll:
+  allowed_paths: []
+  description: >
+    SSH polling (generic). Does not use HTTP. Targets must be explicitly
+    allowlisted via SSH_TARGETS / DEVICE_ALLOWLIST.

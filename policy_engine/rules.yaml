@@ -1,0 +1,80 @@
+version: 1
+
+rules:
+  # ---- Phase 4: OSINT-driven overrides --------------------------------
+  # These rules fire before source-specific rules so that a clear
+  # external verdict can escalate an event regardless of the rule-based
+  # risk score. Analysts still review every non-allow outcome.
+  - id: OSINT-MALICIOUS-001
+    when:
+      feature_flags:
+        osint_verdict: malicious
+    action: escalate
+    requires_human_review: true
+    reason: >-
+      An OSINT provider independently flagged an indicator in this event
+      as malicious. The event is escalated for immediate review.
+
+  - id: OSINT-SUSPICIOUS-001
+    when:
+      feature_flags:
+        osint_verdict: suspicious
+    action: queue_for_review
+    requires_human_review: true
+    reason: >-
+      An OSINT provider flagged an indicator in this event as
+      suspicious. Queue for reviewer triage before any action.
+
+  - id: EMAIL-HIGH-001
+    when:
+      source: email_gateway
+      min_final_score: 0.75
+    action: escalate
+    requires_human_review: true
+    reason: High-risk email events must be escalated.
+
+  - id: LMS-MED-001
+    when:
+      source: lms
+      min_final_score: 0.40
+      max_final_score: 0.74
+    action: queue_for_review
+    requires_human_review: true
+    reason: Medium-risk LMS events require reviewer inspection.
+
+  - id: TRAFFIC-ANOMALY-HIGH-001
+    when:
+      source: traffic_anomaly
+      event_type: traffic_anomaly_high
+    action: escalate
+    requires_human_review: true
+    reason: >-
+      High-severity network anomaly detected. Detector output is
+      aggregate-only (no raw IPs or payloads) and must be reviewed by a
+      human analyst before any downstream action is taken.
+
+  - id: TRAFFIC-ANOMALY-MED-001
+    when:
+      source: traffic_anomaly
+      event_type: traffic_anomaly_medium
+    action: queue_for_review
+    requires_human_review: true
+    reason: >-
+      Medium-severity network anomaly. Queue for reviewer triage; no
+      automated enforcement is permitted for traffic-derived signals.
+
+  - id: TRAFFIC-ANOMALY-LOW-001
+    when:
+      source: traffic_anomaly
+      event_type: traffic_anomaly_low
+    action: allow
+    requires_human_review: false
+    reason: >-
+      Low-severity network anomaly. Logged for trend analysis only.
+
+  - id: LOW-RISK-001
+    when:
+      max_final_score: 0.39
+    action: allow
+    requires_human_review: false
+    reason: Low-risk events may be logged and allowed.

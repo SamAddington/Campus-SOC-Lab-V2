@@ -1,0 +1,61 @@
+{
+  "scenario_id": "mixed_benign_noise",
+  "description": "Mostly benign campus reminders and notices used to test false positives and reviewer burden.",
+  "events": [
+    {
+      "event_id": "evt-3201",
+      "payload": {
+        "user_id": "student321",
+        "email": "student321@example.edu",
+        "source": "lms",
+        "message": "Reminder: your sociology quiz opens tomorrow at 9 AM.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3202",
+      "payload": {
+        "user_id": "student322",
+        "email": "student322@example.edu",
+        "source": "email_gateway",
+        "message": "Campus wellness workshop starts at noon in the student center.",
+        "event_type": "campus_event",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3203",
+      "payload": {
+        "user_id": "student323",
+        "email": "student323@example.edu",
+        "source": "lms",
+        "message": "Your assignment feedback has been released in the LMS.",
+        "event_type": "course_update",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3204",
+      "payload": {
+        "user_id": "student324",
+        "email": "student324@example.edu",
+        "source": "email_gateway",
+        "message": "Library hours have been extended during finals week.",
+        "event_type": "campus_notice",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3205",
+      "payload": {
+        "user_id": "student325",
+        "email": "student325@example.edu",
+        "source": "lms",
+        "message": "Reminder: peer review comments are due tonight at 11:59 PM.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    }
+  ]
+}

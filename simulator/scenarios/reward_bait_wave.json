@@ -1,0 +1,50 @@
+{
+  "scenario_id": "reward_bait_wave",
+  "description": "Burst of reward-bait phishing attempts mixed with one legitimate campus incentive message.",
+  "events": [
+    {
+      "event_id": "evt-3301",
+      "payload": {
+        "user_id": "student331",
+        "email": "student331@example.edu",
+        "source": "email_gateway",
+        "message": "Receive a gift card after confirming your campus account now at http://fake-bonus.example",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3302",
+      "payload": {
+        "user_id": "student332",
+        "email": "student332@example.edu",
+        "source": "email_gateway",
+        "message": "Bonus reward available today only. Verify your account credentials immediately.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3303",
+      "payload": {
+        "user_id": "student333",
+        "email": "student333@example.edu",
+        "source": "email_gateway",
+        "message": "Students who attend the financial literacy workshop will receive a bookstore voucher.",
+        "event_type": "campus_event",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3304",
+      "payload": {
+        "user_id": "student334",
+        "email": "student334@example.edu",
+        "source": "email_gateway",
+        "message": "Confirm your account now to claim your campus reward.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    }
+  ]
+}

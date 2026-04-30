@@ -1,0 +1,15 @@
+{
+  "round": 1,
+  "feature_order": [
+    "contains_link",
+    "contains_password",
+    "contains_urgent",
+    "contains_reward",
+    "len_message_scaled"
+  ],
+  "coef": [1.25, 1.10, 0.95, 0.80, 0.20],
+  "intercept": -1.35,
+  "num_clients": 3,
+  "total_samples": 180,
+  "updated_at": "2026-03-11T15:30:00Z"
+}

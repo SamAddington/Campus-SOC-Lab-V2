@@ -1,0 +1,61 @@
+{
+  "scenario_id": "benign_multilingual_reminders",
+  "description": "Mostly benign multilingual reminders to stress-test fairness and false-positive control.",
+  "events": [
+    {
+      "event_id": "evt-3901",
+      "payload": {
+        "user_id": "student391",
+        "email": "student391@example.edu",
+        "source": "lms",
+        "message": "Reminder: your English composition draft is due tomorrow.",
+        "event_type": "course_reminder",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3902",
+      "payload": {
+        "user_id": "student392",
+        "email": "student392@example.edu",
+        "source": "lms",
+        "message": "Recordatorio: su ensayo de historia vence mañana.",
+        "event_type": "course_reminder",
+        "language": "es"
+      }
+    },
+    {
+      "event_id": "evt-3903",
+      "payload": {
+        "user_id": "student393",
+        "email": "student393@example.edu",
+        "source": "email_gateway",
+        "message": "Reminder: campus transfer workshop starts at 1 PM.",
+        "event_type": "campus_event",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3904",
+      "payload": {
+        "user_id": "student394",
+        "email": "student394@example.edu",
+        "source": "email_gateway",
+        "message": "Recordatorio: la feria de recursos estudiantiles empieza a la 1 PM.",
+        "event_type": "campus_event",
+        "language": "es"
+      }
+    },
+    {
+      "event_id": "evt-3905",
+      "payload": {
+        "user_id": "student395",
+        "email": "student395@example.edu",
+        "source": "lms",
+        "message": "Discussion post grading has been completed.",
+        "event_type": "course_update",
+        "language": "en"
+      }
+    }
+  ]
+}

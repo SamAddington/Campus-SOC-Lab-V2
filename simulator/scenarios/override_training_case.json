@@ -1,0 +1,39 @@
+{
+  "scenario_id": "override_training_case",
+  "description": "Borderline cases designed to provoke human overrides and runbook discussion.",
+  "events": [
+    {
+      "event_id": "evt-3701",
+      "payload": {
+        "user_id": "student371",
+        "email": "student371@example.edu",
+        "source": "email_gateway",
+        "message": "Urgent reminder: reset your library PIN if you have not done so this semester.",
+        "event_type": "account_notice",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3702",
+      "payload": {
+        "user_id": "student372",
+        "email": "student372@example.edu",
+        "source": "email_gateway",
+        "message": "Confirm your account now to keep campus email active.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3703",
+      "payload": {
+        "user_id": "student373",
+        "email": "student373@example.edu",
+        "source": "lms",
+        "message": "Immediate action required: complete the course survey to release final materials.",
+        "event_type": "course_notice",
+        "language": "en"
+      }
+    }
+  ]
+}

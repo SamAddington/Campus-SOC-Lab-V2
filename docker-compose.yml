@@ -1,0 +1,500 @@
+# -----------------------------------------------------------------------------
+# Shared environment variables
+# -----------------------------------------------------------------------------
+# HMAC_SECRET keys the anonymization hash. MUST be overridden in any non-
+# workshop deployment. A per-deployment secret means truncated HMAC digests
+# cannot be brute-forced with a rainbow table.
+#
+# Teacher / student providers are independently configured:
+#   TEACHER_PROVIDER  one of: none, ollama, openai, anthropic
+#   STUDENT_PROVIDER  same set; default is ollama so the student runs offline
+#
+# Leaving TEACHER_PROVIDER=none (the default) keeps the stack fully local.
+# -----------------------------------------------------------------------------
+
+x-hmac-env: &hmac_env
+  HMAC_SECRET: ${HMAC_SECRET:-change-me-dev-only}
+
+x-auth-env: &auth_env
+  SOC_API_KEY: ${SOC_API_KEY:-change-me-dev-api-key}
+  SOC_JWT_SECRET: ${SOC_JWT_SECRET:-}
+  SOC_JWT_ISSUER: ${SOC_JWT_ISSUER:-}
+  SOC_JWT_AUDIENCE: ${SOC_JWT_AUDIENCE:-}
+  SOC_JWT_TENANT_CLAIM: ${SOC_JWT_TENANT_CLAIM:-tenant}
+  SOC_OIDC_JWKS_URL: ${SOC_OIDC_JWKS_URL:-}
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./data/opensearch:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  collector:
+    build:
+      context: .
+      dockerfile: collector/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      <<: [*hmac_env, *auth_env]
+      DETECTOR_URL: http://detector:8000
+      ORCHESTRATOR_URL: http://orchestrator:8021
+      AUDIT_URL: http://audit:8022
+      EVENTSTORE_OPENSEARCH_ENABLED: ${EVENTSTORE_OPENSEARCH_ENABLED:-0}
+      EVENTSTORE_OPENSEARCH_URL: ${EVENTSTORE_OPENSEARCH_URL:-http://opensearch:9200}
+      EVENTSTORE_OPENSEARCH_USERNAME: ${EVENTSTORE_OPENSEARCH_USERNAME:-}
+      EVENTSTORE_OPENSEARCH_PASSWORD: ${EVENTSTORE_OPENSEARCH_PASSWORD:-}
+      EVENTSTORE_OPENSEARCH_INDEX: ${EVENTSTORE_OPENSEARCH_INDEX:-agentic-soc-events}
+      EVENTSTORE_ENTITY_INDEX: ${EVENTSTORE_ENTITY_INDEX:-}
+      EVENTSTORE_OPENSEARCH_TLS_VERIFY: ${EVENTSTORE_OPENSEARCH_TLS_VERIFY:-1}
+      CORRELATION_ENABLED: ${CORRELATION_ENABLED:-1}
+      CORRELATION_POLL_SECONDS: ${CORRELATION_POLL_SECONDS:-15}
+      CORRELATION_MAX_MATCHES: ${CORRELATION_MAX_MATCHES:-200}
+      SOC_DEFAULT_TENANT: ${SOC_DEFAULT_TENANT:-default}
+      SOC_TENANT_ISOLATION: ${SOC_TENANT_ISOLATION:-0}
+      CORRELATION_SOC_TENANT: ${CORRELATION_SOC_TENANT:-}
+      # Optional SIEM egress (disabled by default)
+      SIEM_SPOOL_ENABLED: ${SIEM_SPOOL_ENABLED:-0}
+      SIEM_SPOOL_DIR: ${SIEM_SPOOL_DIR:-/app/data/siem_spool}
+      SIEM_SPOOL_MAX_BYTES: ${SIEM_SPOOL_MAX_BYTES:-209715200}
+      SIEM_SPOOL_MAX_FILES: ${SIEM_SPOOL_MAX_FILES:-1000}
+      SIEM_SPOOL_FLUSH_INTERVAL: ${SIEM_SPOOL_FLUSH_INTERVAL:-5}
+      SIEM_SPOOL_BATCH_SIZE: ${SIEM_SPOOL_BATCH_SIZE:-200}
+      SIEM_SPOOL_MAX_ATTEMPTS: ${SIEM_SPOOL_MAX_ATTEMPTS:-50}
+
+      SIEM_SPLUNK_HEC_ENABLED: ${SIEM_SPLUNK_HEC_ENABLED:-0}
+      SIEM_SPLUNK_HEC_URL: ${SIEM_SPLUNK_HEC_URL:-}
+      SIEM_SPLUNK_HEC_TOKEN: ${SIEM_SPLUNK_HEC_TOKEN:-}
+      SIEM_SPLUNK_HEC_INDEX: ${SIEM_SPLUNK_HEC_INDEX:-}
+      SIEM_SPLUNK_HEC_SOURCETYPE: ${SIEM_SPLUNK_HEC_SOURCETYPE:-agentic_soc}
+      SIEM_SPLUNK_HEC_TIMEOUT: ${SIEM_SPLUNK_HEC_TIMEOUT:-10}
+      SIEM_SPLUNK_HEC_RETRIES: ${SIEM_SPLUNK_HEC_RETRIES:-3}
+      SIEM_SPLUNK_HEC_TLS_VERIFY: ${SIEM_SPLUNK_HEC_TLS_VERIFY:-1}
+      SIEM_SPLUNK_HEC_CA_BUNDLE: ${SIEM_SPLUNK_HEC_CA_BUNDLE:-}
+
+      SIEM_ELASTIC_ENABLED: ${SIEM_ELASTIC_ENABLED:-0}
+      SIEM_ELASTIC_URL: ${SIEM_ELASTIC_URL:-}
+      SIEM_ELASTIC_API_KEY: ${SIEM_ELASTIC_API_KEY:-}
+      SIEM_ELASTIC_USERNAME: ${SIEM_ELASTIC_USERNAME:-}
+      SIEM_ELASTIC_PASSWORD: ${SIEM_ELASTIC_PASSWORD:-}
+      SIEM_ELASTIC_INDEX: ${SIEM_ELASTIC_INDEX:-agentic-soc-events}
+      SIEM_ELASTIC_BULK_PATH: ${SIEM_ELASTIC_BULK_PATH:-/_bulk}
+      SIEM_ELASTIC_TIMEOUT: ${SIEM_ELASTIC_TIMEOUT:-10}
+      SIEM_ELASTIC_RETRIES: ${SIEM_ELASTIC_RETRIES:-3}
+      SIEM_ELASTIC_TLS_VERIFY: ${SIEM_ELASTIC_TLS_VERIFY:-1}
+      SIEM_ELASTIC_CA_BUNDLE: ${SIEM_ELASTIC_CA_BUNDLE:-}
+
+      SIEM_SENTINEL_ENABLED: ${SIEM_SENTINEL_ENABLED:-0}
+      SIEM_SENTINEL_WORKSPACE_ID: ${SIEM_SENTINEL_WORKSPACE_ID:-}
+      SIEM_SENTINEL_SHARED_KEY: ${SIEM_SENTINEL_SHARED_KEY:-}
+      SIEM_SENTINEL_LOG_TYPE: ${SIEM_SENTINEL_LOG_TYPE:-AgenticSocEvent}
+      SIEM_SENTINEL_TIMEOUT: ${SIEM_SENTINEL_TIMEOUT:-10}
+      SIEM_SENTINEL_RETRIES: ${SIEM_SENTINEL_RETRIES:-3}
+      SIEM_SENTINEL_TLS_VERIFY: ${SIEM_SENTINEL_TLS_VERIFY:-1}
+      SIEM_SENTINEL_CA_BUNDLE: ${SIEM_SENTINEL_CA_BUNDLE:-}
+
+      SIEM_SYSLOG_ENABLED: ${SIEM_SYSLOG_ENABLED:-0}
+      SIEM_SYSLOG_DEST: ${SIEM_SYSLOG_DEST:-}
+      SIEM_SYSLOG_FORMAT: ${SIEM_SYSLOG_FORMAT:-cef}
+      SIEM_SYSLOG_FACILITY: ${SIEM_SYSLOG_FACILITY:-1}
+      SIEM_SYSLOG_SEVERITY: ${SIEM_SYSLOG_SEVERITY:-5}
+      SIEM_SYSLOG_APP: ${SIEM_SYSLOG_APP:-agentic-soc}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - opensearch
+
+  detector:
+    build: ./detector
+    ports:
+      - "8000:8000"
+    environment:
+      - USE_ML=1
+      - USE_FEDERATED=1
+    volumes:
+      - ./federated/shared:/app/federated_shared
+
+  notebooks:
+    build: ./notebooks
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_TOKEN: wicys2026
+    volumes:
+      - ./data:/workspace/data
+      - ./notebooks/notebooks:/workspace/notebooks
+      - ./audit/ledger:/workspace/data/ledger
+
+  aggregator:
+    build: ./federated/aggregator
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./federated/shared:/app/shared
+
+  client_a:
+    build: ./federated/client_a
+    ports:
+      - "8011:8011"
+    volumes:
+      - ./federated/shared:/app/shared
+
+  client_b:
+    build: ./federated/client_b
+    ports:
+      - "8012:8012"
+    volumes:
+      - ./federated/shared:/app/shared
+
+  client_c:
+    build: ./federated/client_c
+    ports:
+      - "8013:8013"
+    volumes:
+      - ./federated/shared:/app/shared
+
+  policy_engine:
+    build:
+      context: .
+      dockerfile: policy_engine/Dockerfile
+    ports:
+      - "8020:8020"
+    volumes:
+      - ./policy_engine/rules.yaml:/app/rules.yaml
+    environment:
+      <<: *auth_env
+      AUDIT_URL: http://audit:8022
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    ports:
+      - "8021:8021"
+    volumes:
+      - ./federated/shared:/app/federated_shared
+      - ./audit/ledger:/app/ledger
+    environment:
+      <<: *auth_env
+      LLM_ASSISTANT_URL: http://llm_assistant:8024
+      OSINT_URL: http://osint:8028
+      ENABLE_OSINT_ENRICHMENT: ${ENABLE_OSINT_ENRICHMENT:-1}
+      OSINT_TIMEOUT_SECONDS: ${OSINT_TIMEOUT_SECONDS:-30}
+      OSINT_MIN_RULE_SCORE: ${OSINT_MIN_RULE_SCORE:-0.40}
+      SOAR_ENABLED: ${SOAR_ENABLED:-0}
+      SOAR_WEBHOOK_ALLOWLIST: ${SOAR_WEBHOOK_ALLOWLIST:-}
+      SOAR_REQUIRE_APPROVAL: ${SOAR_REQUIRE_APPROVAL:-1}
+    depends_on:
+      - collector
+      - detector
+      - policy_engine
+      - audit
+      - llm_assistant
+      - osint
+
+  audit:
+    build:
+      context: .
+      dockerfile: audit/Dockerfile
+    ports:
+      - "8022:8022"
+    volumes:
+      - ./audit/ledger:/app/ledger
+    environment:
+      <<: *auth_env
+      AUDIT_SIGNING_KEY: ${AUDIT_SIGNING_KEY:-change-me-dev-audit-signing-key}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-90}
+      CASE_SLA_RESPONSE_HOURS_CRITICAL: ${CASE_SLA_RESPONSE_HOURS_CRITICAL:-4}
+      CASE_SLA_RESPONSE_HOURS_HIGH: ${CASE_SLA_RESPONSE_HOURS_HIGH:-8}
+      CASE_SLA_RESPONSE_HOURS_MEDIUM: ${CASE_SLA_RESPONSE_HOURS_MEDIUM:-24}
+      CASE_SLA_RESPONSE_HOURS_LOW: ${CASE_SLA_RESPONSE_HOURS_LOW:-72}
+
+  simulator:
+    build: ./simulator
+    ports:
+      - "8023:8023"
+    volumes:
+      - ./simulator/scenarios:/app/scenarios
+    depends_on:
+      - orchestrator
+
+  console:
+    build:
+      context: ./console
+      args:
+        VITE_OIDC_ISSUER: ${VITE_OIDC_ISSUER:-}
+        VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-}
+        VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-}
+        VITE_OIDC_SCOPES: ${VITE_OIDC_SCOPES:-openid profile email}
+    ports:
+      - "8080:80"
+    depends_on:
+      - audit
+      - orchestrator
+      - simulator
+      - collector
+      - detector
+      - policy_engine
+      - osint
+      - llm_assistant
+      - aggregator
+      - traffic_ingestor
+
+  llm_assistant:
+    build:
+      context: .
+      dockerfile: llm_assistant/Dockerfile
+    ports:
+      - "8024:8024"
+    volumes:
+      # Shadow outputs land under the audit ledger volume so they inherit
+      # the same retention / access-control posture as decision cards.
+      - ./audit/ledger:/app/ledger
+    environment:
+      # --- Student (default: local Ollama, fully offline) ---
+      STUDENT_PROVIDER: ${STUDENT_PROVIDER:-ollama}
+      STUDENT_MODEL: ${STUDENT_MODEL:-llama3.2}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_TIMEOUT: "90"
+
+      # --- Teacher (default: disabled; set to opt into hosted API) ---
+      TEACHER_PROVIDER: ${TEACHER_PROVIDER:-none}
+      TEACHER_MODEL: ${TEACHER_MODEL:-}
+
+      # OpenAI-compatible credentials (api.openai.com, Groq, OpenRouter, ...)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+
+      # Anthropic credentials
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com/v1}
+      ANTHROPIC_MAX_TOKENS: "600"
+
+      # --- Routing ---
+      LLM_DEFAULT_MODE: ${LLM_DEFAULT_MODE:-student_only}
+      LLM_HUMAN_REVIEW_MODE: ${LLM_HUMAN_REVIEW_MODE:-teacher_shadow}
+      LLM_SHADOW_LOG: /app/ledger/teacher_shadow.jsonl
+
+  distiller:
+    build: ./distiller
+    ports:
+      - "8026:8026"
+    volumes:
+      - ./audit/ledger:/app/ledger
+      - ./distiller/corpus:/app/corpus
+    environment:
+      LEDGER_DIR: /app/ledger
+      CORPUS_DIR: /app/corpus
+    depends_on:
+      - audit
+
+  integrations:
+    build:
+      context: .
+      dockerfile: integrations/Dockerfile
+    ports:
+      - "8025:8025"
+    volumes:
+      - ./integrations/state:/app/integration_state
+    environment:
+      <<: [*hmac_env, *auth_env]
+      COLLECTOR_URL: http://collector:8001
+      INTEGRATION_STATE_DIR: /app/integration_state
+      SCOPES_PATH: /app/scopes.yaml
+
+      # --- Canvas ---
+      CANVAS_BASE_URL: ${CANVAS_BASE_URL:-}
+      CANVAS_API_TOKEN: ${CANVAS_API_TOKEN:-}
+      CANVAS_ANNOUNCEMENT_CONTEXTS: ${CANVAS_ANNOUNCEMENT_CONTEXTS:-}
+      CANVAS_INCLUDE_CONVERSATIONS: ${CANVAS_INCLUDE_CONVERSATIONS:-1}
+      CANVAS_INCLUDE_ANNOUNCEMENTS: ${CANVAS_INCLUDE_ANNOUNCEMENTS:-1}
+
+      # --- Blackboard ---
+      BLACKBOARD_BASE_URL: ${BLACKBOARD_BASE_URL:-}
+      BLACKBOARD_APP_KEY: ${BLACKBOARD_APP_KEY:-}
+      BLACKBOARD_APP_SECRET: ${BLACKBOARD_APP_SECRET:-}
+
+      # --- Moodle ---
+      MOODLE_BASE_URL: ${MOODLE_BASE_URL:-}
+      MOODLE_WSTOKEN: ${MOODLE_WSTOKEN:-}
+      MOODLE_USER_ID: ${MOODLE_USER_ID:-0}
+      MOODLE_FORUM_ID: ${MOODLE_FORUM_ID:-}
+
+      # --- Brightspace ---
+      BRIGHTSPACE_BASE_URL: ${BRIGHTSPACE_BASE_URL:-}
+      BRIGHTSPACE_CLIENT_ID: ${BRIGHTSPACE_CLIENT_ID:-}
+      BRIGHTSPACE_CLIENT_SECRET: ${BRIGHTSPACE_CLIENT_SECRET:-}
+      BRIGHTSPACE_REFRESH_TOKEN: ${BRIGHTSPACE_REFRESH_TOKEN:-}
+      BRIGHTSPACE_API_VERSION: ${BRIGHTSPACE_API_VERSION:-1.26}
+      BRIGHTSPACE_ORG_UNIT_ID: ${BRIGHTSPACE_ORG_UNIT_ID:-}
+      BRIGHTSPACE_SCOPE: ${BRIGHTSPACE_SCOPE:-core:*:*}
+
+      # --- Cisco Meraki ---
+      MERAKI_BASE_URL: ${MERAKI_BASE_URL:-https://api.meraki.com}
+      MERAKI_API_KEY: ${MERAKI_API_KEY:-}
+      MERAKI_ORG_ID: ${MERAKI_ORG_ID:-}
+      MERAKI_EVENT_TYPES: ${MERAKI_EVENT_TYPES:-}
+      MERAKI_PRODUCT_TYPES: ${MERAKI_PRODUCT_TYPES:-}
+      MERAKI_LOOKBACK_SECONDS: ${MERAKI_LOOKBACK_SECONDS:-3600}
+
+      # --- Cisco Duo ---
+      DUO_BASE_URL: ${DUO_BASE_URL:-}
+      DUO_IKEY: ${DUO_IKEY:-}
+      DUO_SKEY: ${DUO_SKEY:-}
+      DUO_INCLUDE_ADMIN_LOGS: ${DUO_INCLUDE_ADMIN_LOGS:-0}
+      DUO_MINTIME_EPOCH: ${DUO_MINTIME_EPOCH:-0}
+
+      # --- Cisco Umbrella ---
+      UMBRELLA_BASE_URL: ${UMBRELLA_BASE_URL:-https://reports.api.umbrella.com}
+      UMBRELLA_API_TOKEN: ${UMBRELLA_API_TOKEN:-}
+      UMBRELLA_REPORT: ${UMBRELLA_REPORT:-security-activity}
+
+      # --- Cisco ISE ---
+      ISE_BASE_URL: ${ISE_BASE_URL:-}
+      ISE_USERNAME: ${ISE_USERNAME:-}
+      ISE_PASSWORD: ${ISE_PASSWORD:-}
+
+      # --- Cisco Firepower FMC ---
+      FMC_BASE_URL: ${FMC_BASE_URL:-}
+      FMC_USERNAME: ${FMC_USERNAME:-}
+      FMC_PASSWORD: ${FMC_PASSWORD:-}
+      FMC_DOMAIN_UUID: ${FMC_DOMAIN_UUID:-}
+      FMC_TLS_VERIFY: ${FMC_TLS_VERIFY:-1}
+
+      # --- RESTCONF ---
+      RESTCONF_BASE_URL: ${RESTCONF_BASE_URL:-}
+      RESTCONF_BEARER_TOKEN: ${RESTCONF_BEARER_TOKEN:-}
+      RESTCONF_MODEL: ${RESTCONF_MODEL:-ietf-interfaces:interfaces}
+
+      # --- Device polling ---
+      DEVICE_ALLOWLIST: ${DEVICE_ALLOWLIST:-}
+      SNMP_TARGETS: ${SNMP_TARGETS:-}
+      SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+      SNMP_OIDS: ${SNMP_OIDS:-1.3.6.1.2.1.1.3.0}
+
+      NETCONF_TARGETS: ${NETCONF_TARGETS:-}
+      NETCONF_USERNAME: ${NETCONF_USERNAME:-}
+      NETCONF_PASSWORD: ${NETCONF_PASSWORD:-}
+      NETCONF_PORT: ${NETCONF_PORT:-830}
+      NETCONF_HOSTKEY_VERIFY: ${NETCONF_HOSTKEY_VERIFY:-0}
+
+      SSH_TARGETS: ${SSH_TARGETS:-}
+      SSH_USERNAME: ${SSH_USERNAME:-}
+      SSH_PASSWORD: ${SSH_PASSWORD:-}
+      SSH_PRIVATE_KEY: ${SSH_PRIVATE_KEY:-}
+      SSH_COMMANDS: ${SSH_COMMANDS:-show version}
+    depends_on:
+      - collector
+
+  osint:
+    build:
+      context: .
+      dockerfile: osint/Dockerfile
+    ports:
+      - "8028:8028"
+    environment:
+      <<: *hmac_env
+      OSINT_SCOPES_PATH: /app/scopes.yaml
+
+      # --- Cache ---
+      OSINT_CACHE_TTL_CLEAN: ${OSINT_CACHE_TTL_CLEAN:-86400}
+      OSINT_CACHE_TTL_HIT: ${OSINT_CACHE_TTL_HIT:-3600}
+      OSINT_CACHE_MAX_ENTRIES: ${OSINT_CACHE_MAX_ENTRIES:-5000}
+
+      # --- Indicator caps per event ---
+      OSINT_MAX_URLS: ${OSINT_MAX_URLS:-5}
+      OSINT_MAX_DOMAINS: ${OSINT_MAX_DOMAINS:-5}
+      OSINT_MAX_IPS: ${OSINT_MAX_IPS:-5}
+      OSINT_MAX_HASHES: ${OSINT_MAX_HASHES:-5}
+
+      # --- Time budgets ---
+      OSINT_PER_PROVIDER_TIMEOUT: ${OSINT_PER_PROVIDER_TIMEOUT:-6}
+      OSINT_PER_ENRICHMENT_DEADLINE: ${OSINT_PER_ENRICHMENT_DEADLINE:-25}
+
+      # --- Privacy / governance ---
+      OSINT_REJECT_PRIVATE_IPS: ${OSINT_REJECT_PRIVATE_IPS:-1}
+
+      # --- VirusTotal (disabled without key) ---
+      VT_API_KEY: ${VT_API_KEY:-}
+      OSINT_VT_RPM: ${OSINT_VT_RPM:-4}
+
+      # --- URLhaus (no key) ---
+      OSINT_URLHAUS_RPM: ${OSINT_URLHAUS_RPM:-60}
+
+      # --- AbuseIPDB (disabled without key) ---
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      OSINT_ABUSEIPDB_RPM: ${OSINT_ABUSEIPDB_RPM:-30}
+
+      # --- AlienVault OTX (disabled without key) ---
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      OSINT_OTX_RPM: ${OSINT_OTX_RPM:-60}
+
+      # --- Phishtank (optional app key) ---
+      PHISHTANK_APP_KEY: ${PHISHTANK_APP_KEY:-}
+      PHISHTANK_API_KEY: ${PHISHTANK_API_KEY:-}
+      OSINT_PHISHTANK_RPM: ${OSINT_PHISHTANK_RPM:-30}
+
+      # --- OpenPhish (no key, feed pull) ---
+      OSINT_OPENPHISH_RPM: ${OSINT_OPENPHISH_RPM:-1}
+
+  traffic_ingestor:
+    build:
+      context: .
+      dockerfile: traffic_ingestor/Dockerfile
+    ports:
+      - "8027:8027"
+    environment:
+      <<: *hmac_env
+      COLLECTOR_URL: http://collector:8001
+
+      # --- Windowing ---
+      TRAFFIC_WINDOW_SECONDS: ${TRAFFIC_WINDOW_SECONDS:-60}
+      TRAFFIC_MAX_WINDOWS: ${TRAFFIC_MAX_WINDOWS:-240}
+
+      # --- Privacy ---
+      TRAFFIC_IPV4_PREFIX: ${TRAFFIC_IPV4_PREFIX:-24}
+      TRAFFIC_IPV6_PREFIX: ${TRAFFIC_IPV6_PREFIX:-64}
+      TRAFFIC_K_ANON_MIN: ${TRAFFIC_K_ANON_MIN:-5}
+
+      # --- Detection ---
+      TRAFFIC_WARMUP_WINDOWS: ${TRAFFIC_WARMUP_WINDOWS:-15}
+      TRAFFIC_EWMA_ALPHA: ${TRAFFIC_EWMA_ALPHA:-0.2}
+      TRAFFIC_EWMA_Z: ${TRAFFIC_EWMA_Z:-3.0}
+      TRAFFIC_RATE_BURST_MULT: ${TRAFFIC_RATE_BURST_MULT:-5.0}
+      TRAFFIC_ISOFOREST_REFIT_EVERY: ${TRAFFIC_ISOFOREST_REFIT_EVERY:-30}
+      TRAFFIC_ISOFOREST_CONTAMINATION: ${TRAFFIC_ISOFOREST_CONTAMINATION:-0.05}
+      TRAFFIC_ENABLE_EWMA: ${TRAFFIC_ENABLE_EWMA:-1}
+      TRAFFIC_ENABLE_RATE_BURST: ${TRAFFIC_ENABLE_RATE_BURST:-1}
+      TRAFFIC_ENABLE_ISOFOREST: ${TRAFFIC_ENABLE_ISOFOREST:-1}
+
+      # --- Emission ---
+      TRAFFIC_EMIT_TO_COLLECTOR: ${TRAFFIC_EMIT_TO_COLLECTOR:-1}
+      TRAFFIC_SEVERITY_HIGH_Z: ${TRAFFIC_SEVERITY_HIGH_Z:-5.0}
+      TRAFFIC_SEVERITY_MEDIUM_Z: ${TRAFFIC_SEVERITY_MEDIUM_Z:-3.0}
+
+      # --- Synthetic traffic (workshop mode) ---
+      TRAFFIC_SYNTHETIC_ENABLED: ${TRAFFIC_SYNTHETIC_ENABLED:-0}
+    depends_on:
+      - collector
+
+networks:
+  default:
+    name: wicys_soc_net

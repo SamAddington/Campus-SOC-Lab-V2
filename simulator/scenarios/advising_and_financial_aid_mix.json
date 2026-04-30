@@ -1,0 +1,50 @@
+{
+  "scenario_id": "advising_and_financial_aid_mix",
+  "description": "Legitimate advising and financial aid messages mixed with phishing-style account warnings.",
+  "events": [
+    {
+      "event_id": "evt-3501",
+      "payload": {
+        "user_id": "student351",
+        "email": "student351@example.edu",
+        "source": "email_gateway",
+        "message": "Your financial aid workshop registration is confirmed for Tuesday.",
+        "event_type": "appointment_notice",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3502",
+      "payload": {
+        "user_id": "student352",
+        "email": "student352@example.edu",
+        "source": "email_gateway",
+        "message": "Urgent: verify your student portal credentials now to avoid financial aid delay.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3503",
+      "payload": {
+        "user_id": "student353",
+        "email": "student353@example.edu",
+        "source": "lms",
+        "message": "Your advising appointment is scheduled for Monday at 9 AM.",
+        "event_type": "appointment_notice",
+        "language": "en"
+      }
+    },
+    {
+      "event_id": "evt-3504",
+      "payload": {
+        "user_id": "student354",
+        "email": "student354@example.edu",
+        "source": "email_gateway",
+        "message": "Confirm your account immediately to keep access to your student aid documents.",
+        "event_type": "suspicious_email",
+        "language": "en"
+      }
+    }
+  ]
+}

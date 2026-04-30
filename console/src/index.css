@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-feature-settings: "cv11", "ss01", "ss03";
+    background:
+      radial-gradient(1100px 700px at 85% -10%, rgba(34, 211, 238, 0.05), transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, rgba(99, 102, 241, 0.05), transparent 60%),
+      #0b0f14;
+  }
+
+  ::selection {
+    background: rgba(34, 211, 238, 0.25);
+    color: #e5e7eb;
+  }
+
+  /* Scrollbar (webkit) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1f2a37;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #243244;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-surface shadow-card;
+  }
+  .card-muted {
+    @apply rounded-lg border border-border bg-muted;
+  }
+  .kbd {
+    @apply rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-subtle;
+  }
+  .mono {
+    @apply font-mono text-[12.5px];
+  }
+  .label {
+    @apply text-[11px] uppercase tracking-[0.08em] text-dim;
+  }
+  .nav-link {
+    @apply flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-subtle hover:bg-muted hover:text-text transition-colors;
+  }
+  .nav-link-active {
+    @apply bg-muted text-text shadow-[inset_2px_0_0_0_#22d3ee];
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 text-sm text-text hover:bg-elev transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply border-accent/40 bg-accent/10 text-accent hover:bg-accent/20;
+  }
+  .input {
+    @apply w-full rounded-md border border-border bg-muted px-3 py-1.5 text-sm text-text outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40 placeholder:text-dim;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-subtle;
+  }
+  .link {
+    @apply text-accent hover:underline underline-offset-2;
+  }
+}

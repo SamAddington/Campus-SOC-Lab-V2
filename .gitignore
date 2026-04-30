@@ -1,0 +1,28 @@
+# Secrets
+.env
+*.env.local
+
+# Node
+node_modules/
+**/node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Audit artifacts (opt in per deployment)
+audit/ledger/*.jsonl
+distiller/corpus/*.jsonl
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+*.pid
