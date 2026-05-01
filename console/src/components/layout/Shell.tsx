@@ -20,6 +20,7 @@ import {
   FileCheck2,
   FolderKanban,
   Radar,
+  GraduationCap,
   ShieldCheck,
   History,
 } from "lucide-react";
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
 const SYSTEM_NAV: NavItem[] = [
   { to: "/compliance", label: "Compliance Hub", icon: <ClipboardCheck size={16} /> },
   { to: "/audit", label: "Audit", icon: <FileCheck2 size={16} /> },
+  { to: "/training", label: "Training", icon: <GraduationCap size={16} /> },
   { to: "/cases", label: "Cases", icon: <FolderKanban size={16} /> },
   { to: "/guardrails", label: "Guardrails", icon: <ShieldCheck size={16} /> },
   { to: "/help", label: "Help", icon: <LifeBuoy size={16} /> },

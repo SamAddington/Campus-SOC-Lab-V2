@@ -19,6 +19,7 @@ import { Hunts } from "@/pages/Hunts";
 import { Guardrails } from "@/pages/Guardrails";
 import { Timeline } from "@/pages/Timeline";
 import { AuthCallback } from "@/pages/AuthCallback";
+import { Training } from "@/pages/Training";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/hunts" element={<Hunts />} />
           <Route path="/guardrails" element={<Guardrails />} />
           <Route path="/timeline" element={<Timeline />} />
+          <Route path="/training" element={<Training />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/help" element={<Help />} />
           <Route path="/auth/callback" element={<AuthCallback />} />

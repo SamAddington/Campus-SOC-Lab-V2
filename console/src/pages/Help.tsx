@@ -15,6 +15,7 @@ import {
   BookOpen,
   Info,
   BrainCircuit,
+  GraduationCap,
 } from "lucide-react";
 import { Card, KeyValueGrid } from "@/components/ui/Card";
 import { SeverityBadge, Chip } from "@/components/ui/Badge";
@@ -47,6 +48,7 @@ export function Help() {
           <QuickLink to="#llm" icon={<BrainCircuit size={14} />}>LLM Assistant</QuickLink>
           <QuickLink to="#federated" icon={<Network size={14} />}>Federated ML</QuickLink>
           <QuickLink to="#simulator" icon={<Play size={14} />}>Simulator</QuickLink>
+          <QuickLink to="#training" icon={<GraduationCap size={14} />}>Training</QuickLink>
           <QuickLink to="#services" icon={<Boxes size={14} />}>Services</QuickLink>
           <QuickLink to="#settings" icon={<Cog size={14} />}>Settings</QuickLink>
           <QuickLink to="#compliance" icon={<ShieldAlert size={14} />}>Compliance Hub</QuickLink>
@@ -286,6 +288,30 @@ export function Help() {
           <Feature title="Tip">
             Run a scenario, then switch to the <Link to="/alerts" className="link">Alerts</Link>{" "}
             page — new cards will stream in live.
+          </Feature>
+        </FeatureList>
+      </Section>
+
+      <Section
+        id="training"
+        icon={<GraduationCap size={16} />}
+        title="Training"
+        source="audit (training ledger) · llm_assistant (grading) · console"
+        blurb="Interactive analyst tutoring labs. Actions are logged and graded (deterministic + optional LLM letter grade)."
+      >
+        <FeatureList>
+          <Feature title="Challenge briefing + objectives">
+            Pick a challenge, read the briefing, and complete the required objectives.
+            Each action you record is appended to the audit ledger for transparency.
+          </Feature>
+          <Feature title="Phishing lab: sample email modal">
+            The phishing challenge includes a <b>View sample phishing email</b> popup so trainees can practice extracting concrete indicators (sender, links, themes).
+          </Feature>
+          <Feature title="DDoS lab: animated network view">
+            The DDoS challenge includes a simulated network map showing connected hosts and how many are flagged <b>under attack</b>, with a lightweight animation to visualize changing impact.
+          </Feature>
+          <Feature title="After Action Report (AAR)">
+            Completing a run generates an AAR JSON report including pass/fail and (when enabled) an LLM-provided letter grade and feedback.
           </Feature>
         </FeatureList>
       </Section>

@@ -64,6 +64,41 @@ export type AuditIntegrityVerify = {
   simulation_runs: AuditIntegrityCheck;
 };
 
+export type TrainingChallenge = {
+  challenge_id: string;
+  name: string;
+  difficulty?: string;
+  category?: string;
+  description?: string;
+  briefing?: string;
+  objectives?: Array<{ id: string; title: string; required?: boolean }>;
+  rubric?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type TrainingRun = {
+  run_id: string;
+  challenge_id: string;
+  trainee_id?: string;
+  status: string;
+  started_at: string;
+  completed_at?: string | null;
+  score?: number | null;
+  passed?: boolean | null;
+  report?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type TrainingAction = {
+  action_id: string;
+  run_id: string;
+  trainee_id?: string;
+  action_type: string;
+  payload?: Record<string, unknown>;
+  created_at: string;
+  [k: string]: unknown;
+};
+
 export type FederatedStatus = {
   round: number;
   expected_clients: string[];
@@ -583,6 +618,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ rule_id }),
     }),
+
+  // Training / interactive simulator tutor (MVP)
+  trainingChallenges: () => request<{ count: number; items: TrainingChallenge[] }>(`/api/audit/training/challenges`),
+  trainingRunStart: (challenge_id: string) =>
+    request<{ status: string; run: TrainingRun; challenge: TrainingChallenge }>(`/api/audit/training/runs`, {
+      method: "POST",
+      body: JSON.stringify({ challenge_id }),
+    }),
+  trainingAction: (run_id: string, action_type: string, payload: Record<string, unknown> = {}) =>
+    request<{ status: string; action: TrainingAction }>(`/api/audit/training/actions`, {
+      method: "POST",
+      body: JSON.stringify({ run_id, action_type, payload }),
+    }),
+  trainingComplete: (run_id: string) =>
+    request<{ status: string; run: TrainingRun }>(`/api/audit/training/complete`, {
+      method: "POST",
+      body: JSON.stringify({ run_id }),
+    }),
+  trainingRunGet: (run_id: string) =>
+    request<{ run: TrainingRun; actions: TrainingAction[] }>(`/api/audit/training/runs/${encodeURIComponent(run_id)}`),
 
   // Health checks
   health: (

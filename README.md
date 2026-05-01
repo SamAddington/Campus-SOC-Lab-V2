@@ -203,6 +203,7 @@ A Vite + React + TypeScript + Tailwind SPA that replaces per-service HTML pages:
 * **Federated ML** — Round status, per-client participation, current global model (coefficients + feature order + update time).
 * **Traffic** — Window configuration, anomaly counts, synthetic-generator controls, traffic-volume area chart, recent-anomalies table.
 * **Simulator** — Pick and run a scenario; results stream into Alerts live.
+* **Training** — Interactive analyst tutoring labs: phishing email popup + DDoS network map animation, action logging, and LLM letter-grade AAR.
 * **Services** — Per-backend health dashboard with latency and errors.
 * **Compliance Hub** — Framework-aligned view of Zero Trust controls, AI guardrails, and audit integrity signals.
 * **Audit** — Integrity verification, retention operations, and evidence exports (JSON/Markdown/PDF via print-to-PDF).

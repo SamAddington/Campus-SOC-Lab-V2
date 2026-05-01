@@ -199,7 +199,7 @@ export function Settings() {
             />
             <ToggleField
               label="Reduce motion"
-              hint="Minimizes animations for accessibility."
+              hint="Minimizes animations for accessibility (also affects training visuals like the DDoS network pulse)."
               checked={draft.reduceMotion}
               onChange={(v) => setDraft({ ...draft, reduceMotion: v })}
             />

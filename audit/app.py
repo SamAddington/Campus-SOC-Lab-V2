@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import uuid
+import requests
 
 import sys
 sys.path.insert(0, "/app")
@@ -59,6 +60,8 @@ LEDGER_DIR = Path("/app/ledger")
 LEDGER_DIR.mkdir(parents=True, exist_ok=True)
 AUDIT_SIGNING_KEY = os.getenv("AUDIT_SIGNING_KEY", "change-me-dev-audit-signing-key")
 AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "90"))
+LLM_ASSISTANT_URL = os.getenv("LLM_ASSISTANT_URL", "http://llm_assistant:8024").rstrip("/")
+TRAINING_LLM_GRADING_ENABLED = os.getenv("TRAINING_LLM_GRADING_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")
 
 DECISIONS_PATH = LEDGER_DIR / "decision_cards.jsonl"
 OVERRIDES_PATH = LEDGER_DIR / "overrides.jsonl"
@@ -70,6 +73,8 @@ OPERATOR_ACTIONS_PATH = LEDGER_DIR / "operator_actions.jsonl"
 SAVED_SEARCHES_PATH = LEDGER_DIR / "saved_searches.jsonl"
 CORRELATION_RULES_PATH = LEDGER_DIR / "correlation_rules.jsonl"
 CORRELATION_ALERTS_PATH = LEDGER_DIR / "correlation_alerts.jsonl"
+TRAINING_RUNS_PATH = LEDGER_DIR / "training_runs.jsonl"
+TRAINING_ACTIONS_PATH = LEDGER_DIR / "training_actions.jsonl"
 
 
 class DecisionCard(BaseModel):
@@ -157,6 +162,52 @@ class OperatorAction(BaseModel):
     resource: str = ""
     detail: Dict[str, Any] = {}
     created_at: Optional[str] = None
+
+
+class TrainingChallenge(BaseModel):
+    challenge_id: str
+    name: str
+    difficulty: str = "beginner"  # beginner|intermediate|advanced
+    category: str = "phishing"    # phishing|ddos|malware|insider|other
+    description: str = ""
+    briefing: str = ""
+    objectives: List[Dict[str, Any]] = Field(default_factory=list)  # [{id,title,required}]
+    rubric: Dict[str, Any] = Field(default_factory=dict)            # weights, pass score, gates, etc.
+
+
+class TrainingRun(BaseModel):
+    run_id: str
+    challenge_id: str
+    trainee_id: str = ""
+    status: str = "in_progress"  # in_progress|completed|abandoned
+    started_at: str
+    completed_at: Optional[str] = None
+    score: Optional[float] = None
+    passed: Optional[bool] = None
+    report: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TrainingAction(BaseModel):
+    action_id: str
+    run_id: str
+    trainee_id: str = ""
+    action_type: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+
+
+class TrainingStartRequest(BaseModel):
+    challenge_id: str
+
+
+class TrainingActionRequest(BaseModel):
+    run_id: str
+    action_type: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TrainingCompleteRequest(BaseModel):
+    run_id: str
 
 
 class SavedSearch(BaseModel):
@@ -267,6 +318,201 @@ def _append_operator_action(*, principal: Dict[str, Any], action: str, resource:
     )
 
 
+def _training_challenges() -> List[TrainingChallenge]:
+    """MVP challenge catalog (code-defined)."""
+    late_night = TrainingChallenge(
+        challenge_id="late-night-phishing",
+        name="Late-night phishing campaign",
+        difficulty="beginner",
+        category="phishing",
+        description="Investigate a burst of suspicious emails after hours; scope the campaign and choose safe response steps.",
+        briefing=(
+            "### Situation\n"
+            "It’s **01:42 local time**. The helpdesk and after-hours hotline report a burst of **password reset / account verification** emails. "
+            "Multiple users say they received similar messages within minutes.\n\n"
+            "### Your role\n"
+            "You are the **on-call SOC analyst**. Your job is to determine whether this is a coordinated phishing campaign, scope impact, "
+            "and document safe response steps.\n\n"
+            "### Constraints (training guardrails)\n"
+            "- Treat this as a **training lab**: you do not have production authority.\n"
+            "- Avoid disruptive actions without evidence.\n"
+            "- Write notes as if another analyst will take over at shift change.\n\n"
+            "### What you should produce\n"
+            "1) A case with a short summary and severity.\n"
+            "2) At least **two concrete indicators** (URL/domain/sender/subject theme/user reports).\n"
+            "3) A short scope statement (who/what/when/how) + next pivots.\n"
+            "4) A response plan (user comms, containment options, monitoring).\n\n"
+            "### Hints\n"
+            "- Look for shared subject lines, sender patterns, and link themes.\n"
+            "- Separate what you *know* from what you *suspect*.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document at least 2 indicators (e.g., subject theme, sender pattern, URL/domain, user reports).", "required": True},
+            {"id": "scope_campaign", "title": "Describe scope (who/what/when) and recommend next pivots.", "required": True},
+            {"id": "response_steps", "title": "Provide safe response steps (user comms, containment, monitoring).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.70,
+            "weights": {
+                "open_case": 0.25,
+                "document_indicators": 0.25,
+                "scope_campaign": 0.25,
+                "response_steps": 0.25,
+            },
+        },
+    )
+    ddos = TrainingChallenge(
+        challenge_id="full-scale-ddos",
+        name="Full-scale DDoS attack",
+        difficulty="intermediate",
+        category="ddos",
+        description="Investigate a large traffic spike and propose a safe mitigation plan without unsafe automated enforcement.",
+        briefing=(
+            "### Situation\n"
+            "It’s **02:17 local time**. Operators report intermittent timeouts for public-facing services. "
+            "Network telemetry indicates a sharp, sustained increase in inbound traffic volume. "
+            "You suspect a **volumetric DDoS** or coordinated abuse.\n\n"
+            "### Your role\n"
+            "You are the **SOC analyst coordinating with network operations**. Your goal is to:\n"
+            "1) confirm whether the pattern is consistent with DDoS, 2) document scope/impact, and 3) recommend safe mitigations.\n\n"
+            "### Constraints (training guardrails)\n"
+            "- This lab uses **aggregate-only telemetry** (no raw IPs/payloads).\n"
+            "- Guardrail: **do not recommend blanket automated enforcement** (e.g., “block all IPs”) based only on aggregate anomaly signals.\n"
+            "- Prefer staged mitigations: rate limiting, upstream/provider coordination, WAF/CDN protections, and comms.\n\n"
+            "### What you should produce\n"
+            "1) A high/critical case summary.\n"
+            "2) At least two observations: impacted service(s), timeframe, traffic pattern, symptoms.\n"
+            "3) A scope statement: what is degraded, where, when.\n"
+            "4) A mitigation plan including upstream/provider actions + customer comms.\n\n"
+            "### Hints\n"
+            "- Avoid overconfident attribution.\n"
+            "- Emphasize safe mitigations and coordination steps.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case (high/critical) with short incident summary.", "required": True},
+            {"id": "document_indicators", "title": "Document at least 2 indicators/observations (target service, timeframe, traffic pattern, affected users).", "required": True},
+            {"id": "scope_campaign", "title": "Describe scope and impact (what is degraded, where, when).", "required": True},
+            {"id": "response_steps", "title": "Provide mitigation steps and comms plan (include upstream/provider actions).", "required": True},
+            {"id": "guardrails_no_auto_enforcement", "title": "Avoid unsafe automated enforcement recommendations (no blanket IP blocks from aggregate-only signals).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.75,
+            "weights": {
+                "open_case": 0.20,
+                "document_indicators": 0.20,
+                "scope_campaign": 0.20,
+                "response_steps": 0.30,
+                "guardrails_no_auto_enforcement": 0.10,
+            },
+            "guardrails": {
+                "forbidden_phrases": [
+                    "auto-block",
+                    "automatically block",
+                    "block all",
+                    "blackhole all",
+                    "drop all traffic",
+                    "block every ip",
+                    "block all ips",
+                ]
+            },
+        },
+    )
+    return [late_night, ddos]
+
+
+def _training_challenge_by_id(challenge_id: str) -> Optional[TrainingChallenge]:
+    cid = str(challenge_id or "").strip()
+    for c in _training_challenges():
+        if c.challenge_id == cid:
+            return c
+    return None
+
+
+def _training_latest_run(run_id: str) -> Optional[Dict[str, Any]]:
+    return _find_latest_by_id(read_jsonl(TRAINING_RUNS_PATH), "run_id", str(run_id or ""))
+
+
+def _training_actions_for(run_id: str) -> List[Dict[str, Any]]:
+    rid = str(run_id or "")
+    return [a for a in read_jsonl(TRAINING_ACTIONS_PATH) if str(a.get("run_id") or "") == rid]
+
+
+def _training_score(*, challenge: TrainingChallenge, actions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Deterministic MVP scorer. Keeps evaluation explainable."""
+    weights = (challenge.rubric or {}).get("weights") if isinstance(challenge.rubric, dict) else None
+    weights = weights if isinstance(weights, dict) else {}
+    pass_score = float((challenge.rubric or {}).get("pass_score") or 0.7) if isinstance(challenge.rubric, dict) else 0.7
+
+    flags = {obj.get("id"): False for obj in (challenge.objectives or []) if isinstance(obj, dict) and obj.get("id")}
+    notes_text: List[str] = []
+    response_text: List[str] = []
+    for a in actions:
+        at = str(a.get("action_type") or "")
+        payload = a.get("payload") if isinstance(a.get("payload"), dict) else {}
+        if at == "case_create":
+            flags["open_case"] = True
+        if at in ("case_note", "campaign_note"):
+            body = str(payload.get("body") or "")
+            if body:
+                notes_text.append(body.lower())
+        if at == "campaign_scope":
+            flags["scope_campaign"] = True
+        if at == "response_plan":
+            flags["response_steps"] = True
+            body2 = str(payload.get("body") or "")
+            if body2:
+                response_text.append(body2.lower())
+
+    combined = " ".join(notes_text)
+    # Minimal heuristic: indicators = look for common indicator-like words.
+    indicator_hits = 0
+    for kw in ("http", "domain", "sender", "from:", "link", "url", "subject", "spoof", "login", "reset"):
+        if kw in combined:
+            indicator_hits += 1
+    if indicator_hits >= 2:
+        flags["document_indicators"] = True
+
+    # Challenge-specific guardrail: no unsafe automated enforcement for DDoS.
+    forbidden = []
+    if isinstance(challenge.rubric, dict):
+        gr = challenge.rubric.get("guardrails")
+        if isinstance(gr, dict) and isinstance(gr.get("forbidden_phrases"), list):
+            forbidden = [str(x).lower() for x in gr.get("forbidden_phrases") if str(x).strip()]
+    resp_combined = " ".join(response_text)
+    if "guardrails_no_auto_enforcement" in flags:
+        flags["guardrails_no_auto_enforcement"] = True
+        hits = [p for p in forbidden if p and p in resp_combined]
+        if hits:
+            flags["guardrails_no_auto_enforcement"] = False
+
+    # Weighted score: objectives achieved.
+    total = 0.0
+    by_obj: Dict[str, Any] = {}
+    for obj_id, ok in flags.items():
+        w = float(weights.get(obj_id) or 0.0)
+        total += (w if ok else 0.0)
+        by_obj[obj_id] = {"ok": bool(ok), "weight": w}
+    # Normalize if weights don’t sum to 1.
+    wsum = sum(float(v.get("weight") or 0.0) for v in by_obj.values()) or 1.0
+    score = max(0.0, min(1.0, total / wsum))
+    passed = score >= pass_score
+
+    return {
+        "score": score,
+        "passed": passed,
+        "by_objective": by_obj,
+        "pass_score": pass_score,
+        "notes": {
+            "indicator_hits": indicator_hits,
+            "guardrails": {
+                "forbidden_phrases": forbidden,
+            },
+            "explainability": "MVP scoring is deterministic and objective-based; narrative coaching can be added later.",
+        },
+    }
+
+
 def append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
     previous_hash = ""
     if path.exists():
@@ -344,6 +590,173 @@ def _purge_expired(path: Path, retention_days: int) -> int:
 @app.get("/health")
 def health():
     return {"status": "up"}
+
+
+# ---------------------------------------------------------------------------
+# Training / interactive simulator tutor (MVP)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/training/challenges")
+def training_challenges(_: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))]) -> Dict[str, Any]:
+    items = [c.model_dump() for c in _training_challenges()]
+    return {"count": len(items), "items": items}
+
+
+@app.get("/training/challenges/{challenge_id}")
+def training_challenge_detail(
+    challenge_id: str,
+    _: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))],
+) -> Dict[str, Any]:
+    c = _training_challenge_by_id(challenge_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="challenge not found")
+    return {"challenge": c.model_dump()}
+
+
+@app.post("/training/runs")
+def training_run_start(
+    req: TrainingStartRequest,
+    principal: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))],
+) -> Dict[str, Any]:
+    c = _training_challenge_by_id(req.challenge_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="challenge not found")
+
+    run = TrainingRun(
+        run_id=_new_id("trn"),
+        challenge_id=c.challenge_id,
+        trainee_id=str(principal.get("sub") or ""),
+        status="in_progress",
+        started_at=utc_now(),
+    )
+    append_jsonl(TRAINING_RUNS_PATH, run.model_dump())
+    _append_operator_action(
+        principal=principal,
+        action="training_run_start",
+        resource=f"training:{run.run_id}",
+        detail={"challenge_id": c.challenge_id},
+    )
+    return {"status": "started", "run": run.model_dump(), "challenge": c.model_dump()}
+
+
+@app.post("/training/actions")
+def training_action_log(
+    req: TrainingActionRequest,
+    principal: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))],
+) -> Dict[str, Any]:
+    run = _training_latest_run(req.run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    if str(run.get("status") or "") != "in_progress":
+        raise HTTPException(status_code=400, detail="run is not active")
+
+    act = TrainingAction(
+        action_id=_new_id("ta"),
+        run_id=str(req.run_id),
+        trainee_id=str(principal.get("sub") or ""),
+        action_type=str(req.action_type or "").strip(),
+        payload=req.payload if isinstance(req.payload, dict) else {},
+        created_at=utc_now(),
+    )
+    append_jsonl(TRAINING_ACTIONS_PATH, act.model_dump())
+    _append_operator_action(
+        principal=principal,
+        action="training_action",
+        resource=f"training:{req.run_id}",
+        detail={"action_type": act.action_type},
+    )
+    return {"status": "logged", "action": act.model_dump()}
+
+
+@app.post("/training/complete")
+def training_run_complete(
+    req: TrainingCompleteRequest,
+    principal: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))],
+) -> Dict[str, Any]:
+    run = _training_latest_run(req.run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    if str(run.get("status") or "") != "in_progress":
+        raise HTTPException(status_code=400, detail="run is not active")
+    c = _training_challenge_by_id(str(run.get("challenge_id") or ""))
+    if not c:
+        raise HTTPException(status_code=500, detail="challenge definition missing")
+    actions = _training_actions_for(req.run_id)
+
+    score = _training_score(challenge=c, actions=actions)
+    llm_grade: Optional[Dict[str, Any]] = None
+    if TRAINING_LLM_GRADING_ENABLED:
+        try:
+            resp = requests.post(
+                f"{LLM_ASSISTANT_URL}/grade_training",
+                timeout=60,
+                json={
+                    "challenge": c.model_dump(),
+                    "run": {"run_id": req.run_id, "started_at": run.get("started_at"), "trainee_id": run.get("trainee_id")},
+                    "actions": actions,
+                },
+            )
+            llm_grade = resp.json() if resp.ok else {"error": f"http_{resp.status_code}", "detail": resp.text}
+        except Exception as e:
+            llm_grade = {"error": e.__class__.__name__}
+    completed = TrainingRun(
+        run_id=str(run.get("run_id") or ""),
+        challenge_id=c.challenge_id,
+        trainee_id=str(run.get("trainee_id") or ""),
+        status="completed",
+        started_at=str(run.get("started_at") or utc_now()),
+        completed_at=utc_now(),
+        score=float(score.get("score") or 0.0),
+        passed=bool(score.get("passed")),
+        report={
+            "challenge": c.model_dump(),
+            "metrics": score,
+            "llm_grade": llm_grade or {"enabled": False},
+            "action_count": len(actions),
+            "recommendations": [
+                "Write a one-paragraph campaign summary (who/what/when/how).",
+                "Record at least two concrete indicators (URL/domain/sender/subject theme).",
+                "Propose containment + comms steps (user notification, mailbox rules, monitoring).",
+            ],
+        },
+    )
+    # If LLM grading returned a structured grade, let it determine pass/fail + letter grade.
+    if isinstance(llm_grade, dict) and isinstance(llm_grade.get("grade"), dict):
+        g = llm_grade.get("grade")
+        if isinstance(g, dict):
+            if isinstance(g.get("passed"), bool):
+                completed.passed = bool(g.get("passed"))
+            if isinstance(g.get("score_pct"), (int, float)):
+                completed.score = float(g.get("score_pct")) / 100.0
+            # Surface the grade in the report for the console to display.
+            if isinstance(completed.report, dict):
+                completed.report["grade"] = {
+                    "letter": g.get("letter_grade"),
+                    "passed": g.get("passed"),
+                    "score_pct": g.get("score_pct"),
+                    "feedback": g.get("feedback"),
+                }
+    append_jsonl(TRAINING_RUNS_PATH, completed.model_dump())
+    _append_operator_action(
+        principal=principal,
+        action="training_run_complete",
+        resource=f"training:{req.run_id}",
+        detail={"score": completed.score, "passed": completed.passed},
+    )
+    return {"status": "completed", "run": completed.model_dump()}
+
+
+@app.get("/training/runs/{run_id}")
+def training_run_get(
+    run_id: str,
+    _: Annotated[Dict[str, Any], Depends(require_roles("viewer", "analyst", "admin"))],
+) -> Dict[str, Any]:
+    run = _training_latest_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    actions = _training_actions_for(run_id)
+    return {"run": run, "actions": actions}
 
 
 @app.post("/log_decision")

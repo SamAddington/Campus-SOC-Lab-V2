@@ -163,6 +163,139 @@ def _invoke(provider: LLMProvider, prompt: str) -> Dict[str, Any]:
     return _parse_and_validate(raw)
 
 
+# ---------- Training grading (MVP) ---------- #
+
+
+def _parse_and_validate_training_grade(raw: str) -> Dict[str, Any]:
+    """Validate a strict JSON grading response."""
+    try:
+        parsed = json.loads(raw)
+    except Exception as e:
+        raise LLMProviderError(f"Output was not valid JSON: {raw[:300]}") from e
+
+    passed = parsed.get("passed")
+    letter = parsed.get("letter_grade")
+    score_pct = parsed.get("score_pct")
+    feedback = parsed.get("feedback")
+
+    if not isinstance(passed, bool):
+        raise LLMProviderError(f"Missing/invalid passed: {raw[:200]}")
+    if not isinstance(letter, str) or letter.strip().upper() not in {"A", "B", "C", "D", "F"}:
+        raise LLMProviderError(f"Missing/invalid letter_grade: {raw[:200]}")
+    try:
+        score_f = float(score_pct)
+    except Exception as e:
+        raise LLMProviderError(f"Missing/invalid score_pct: {raw[:200]}") from e
+    score_f = max(0.0, min(100.0, score_f))
+    if not isinstance(feedback, dict):
+        raise LLMProviderError(f"Missing/invalid feedback: {raw[:200]}")
+
+    strengths = feedback.get("strengths") or []
+    improvements = feedback.get("improvements") or []
+    steps = feedback.get("step_by_step") or []
+    if not (isinstance(strengths, list) and isinstance(improvements, list) and isinstance(steps, list)):
+        raise LLMProviderError(f"Invalid feedback lists: {raw[:200]}")
+
+    strengths = [str(s).strip() for s in strengths if str(s).strip()][:8]
+    improvements = [str(s).strip() for s in improvements if str(s).strip()][:8]
+    steps = [str(s).strip() for s in steps if str(s).strip()][:10]
+
+    return {
+        "passed": bool(passed),
+        "letter_grade": letter.strip().upper(),
+        "score_pct": score_f,
+        "feedback": {"strengths": strengths, "improvements": improvements, "step_by_step": steps},
+    }
+
+
+def _invoke_training_grade(provider: LLMProvider, prompt: str) -> Dict[str, Any]:
+    raw = provider.generate_json(prompt)
+    return _parse_and_validate_training_grade(raw)
+
+
+def _build_training_grade_prompt(challenge: Dict[str, Any], run: Dict[str, Any], actions: list[Dict[str, Any]]) -> str:
+    return f"""You are grading a SOC analyst training exercise.
+
+Return ONLY valid JSON with EXACT keys:
+{{
+  "passed": true|false,
+  "letter_grade": "A"|"B"|"C"|"D"|"F",
+  "score_pct": 0-100,
+  "feedback": {{
+    "strengths": [string, ...],
+    "improvements": [string, ...],
+    "step_by_step": [string, ...]
+  }}
+}}
+
+Grading guidance:
+- Be strict but fair.
+- Use the challenge objectives and rubric to justify the grade.
+- If the challenge guardrails prohibit unsafe automated enforcement and the trainee recommends it, they should not pass.
+
+Challenge:
+{json.dumps(challenge, indent=2)}
+
+Run:
+{json.dumps(run, indent=2)}
+
+Actions (chronological):
+{json.dumps(actions, indent=2)}
+""".strip()
+
+
+def grade_training(challenge: Dict[str, Any], run: Dict[str, Any], actions: list[Dict[str, Any]]) -> Dict[str, Any]:
+    """Grade a training run using the teacher/student providers.
+
+    Returns a dict shaped for llm_assistant/app.py TrainingGradeResponse.
+    """
+    prompt = _build_training_grade_prompt(challenge, run, actions)
+
+    if _TEACHER.enabled:
+        try:
+            g = _invoke_training_grade(_TEACHER, prompt)
+            return {
+                "grade": g,
+                "llm_used": True,
+                "llm_reason": f"Graded by teacher {_TEACHER.name}:{_TEACHER.model}.",
+                "llm_tier": "teacher",
+                "llm_provider": _TEACHER.name,
+                "llm_model": _TEACHER.model,
+            }
+        except LLMProviderError as e:
+            log.info("Teacher grading failed: %s", e)
+
+    if _STUDENT.enabled:
+        try:
+            g = _invoke_training_grade(_STUDENT, prompt)
+            return {
+                "grade": g,
+                "llm_used": True,
+                "llm_reason": f"Graded by student {_STUDENT.name}:{_STUDENT.model}.",
+                "llm_tier": "student",
+                "llm_provider": _STUDENT.name,
+                "llm_model": _STUDENT.model,
+            }
+        except LLMProviderError as e:
+            log.info("Student grading failed: %s", e)
+
+    return {
+        "grade": {
+            "passed": False,
+            "letter_grade": "F",
+            "score_pct": 0.0,
+            "feedback": {
+                "strengths": [],
+                "improvements": ["No LLM provider configured for grading."],
+                "step_by_step": ["Enable a student or teacher provider, then re-run grading."],
+            },
+        },
+        "llm_used": False,
+        "llm_reason": "fallback: no providers enabled",
+        "llm_tier": "fallback",
+    }
+
+
 # ---------- Fallback ---------- #
 
 def safe_fallback(req: LLMAssistRequestV1, reason: str) -> LLMAssistResponseV1:
