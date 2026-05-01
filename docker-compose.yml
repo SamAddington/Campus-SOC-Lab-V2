@@ -28,7 +28,6 @@ services:
     image: opensearchproject/opensearch:2.14.0
     environment:
       - discovery.type=single-node
-      - plugins.security.disabled=true
       - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
       - DISABLE_INSTALL_DEMO_CONFIG=true
       - DISABLE_SECURITY_PLUGIN=true
@@ -57,7 +56,8 @@ services:
       DETECTOR_URL: http://detector:8000
       ORCHESTRATOR_URL: http://orchestrator:8021
       AUDIT_URL: http://audit:8022
-      EVENTSTORE_OPENSEARCH_ENABLED: ${EVENTSTORE_OPENSEARCH_ENABLED:-0}
+      # OpenSearch service is defined below; enable event store unless explicitly disabled.
+      EVENTSTORE_OPENSEARCH_ENABLED: ${EVENTSTORE_OPENSEARCH_ENABLED:-1}
       EVENTSTORE_OPENSEARCH_URL: ${EVENTSTORE_OPENSEARCH_URL:-http://opensearch:9200}
       EVENTSTORE_OPENSEARCH_USERNAME: ${EVENTSTORE_OPENSEARCH_USERNAME:-}
       EVENTSTORE_OPENSEARCH_PASSWORD: ${EVENTSTORE_OPENSEARCH_PASSWORD:-}
@@ -119,7 +119,8 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - opensearch
+      opensearch:
+        condition: service_healthy
 
   detector:
     build: ./detector
@@ -230,6 +231,9 @@ services:
     build: ./simulator
     ports:
       - "8023:8023"
+    environment:
+      <<: *auth_env
+      SIMULATOR_ORCHESTRATOR_TIMEOUT_SECONDS: ${SIMULATOR_ORCHESTRATOR_TIMEOUT_SECONDS:-180}
     volumes:
       - ./simulator/scenarios:/app/scenarios
     depends_on:
@@ -495,6 +499,5 @@ services:
     depends_on:
       - collector
 
-networks:
-  default:
-    name: wicys_soc_net
+# Default Compose network is `{project}_default` (no fixed name) so it does not collide
+# with an unrelated existing docker network named `wicys_soc_net`.

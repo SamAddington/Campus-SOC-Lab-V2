@@ -32,7 +32,7 @@ docker compose build console
 docker compose up -d console
 ```
 
-Open <http://localhost:8080>. The nginx in the container proxies `/api/<service>/*` to the other services on the `wicys_soc_net` network.
+Open <http://localhost:8080>. The nginx in the container proxies `/api/<service>/*` to the other services on the Compose default bridge network.
 
 ### Local dev (hot-reload)
 

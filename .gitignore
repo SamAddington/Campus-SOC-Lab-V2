@@ -19,6 +19,11 @@ __pycache__/
 audit/ledger/*.jsonl
 distiller/corpus/*.jsonl
 
+# Runtime data (generated during runs)
+data/opensearch/
+data/ingested_events.jsonl
+data/correlation_state.json
+
 # Editor
 .vscode/
 .idea/

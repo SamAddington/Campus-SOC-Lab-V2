@@ -220,6 +220,18 @@ def get_principal(
     return p
 
 
+def api_principal(
+    x_api_key: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    """FastAPI dependency: read `X-API-Key` / `Authorization` from headers and validate.
+
+    Use ``Depends(api_principal)`` instead of ``Depends(get_principal)``. The latter
+    makes FastAPI treat bare parameters as query fields (422), not headers.
+    """
+    return get_principal(x_api_key=x_api_key, authorization=authorization)
+
+
 def require_api_key(
     x_api_key: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),

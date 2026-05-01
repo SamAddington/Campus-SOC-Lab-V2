@@ -12,7 +12,7 @@ import json
 import logging
 import sys
 sys.path.insert(0, "/app")
-from shared.security import require_api_key, require_roles, get_principal
+from shared.security import api_principal, require_api_key, require_roles
 import threading
 import time
 from shared.siem import SIEMEmitters, DiskSpool, load_spool_config
@@ -1114,7 +1114,7 @@ def _shutdown() -> None:
 @app.post("/ingest")
 def ingest(
     payload: IngestInput,
-    principal: Annotated[Dict[str, Any], Depends(get_principal)],
+    principal: Annotated[Dict[str, Any], Depends(api_principal)],
 ):
     soc_tenant = _resolve_ingest_soc_tenant(principal, payload.tenant)
     anon_record = anonymize_record(payload)
@@ -1358,8 +1358,19 @@ def search_facets(
                 "policy_rule_id": _agg_buckets(aggs.get("policy_rule_id")),
             },
         }
+    except requests.exceptions.RequestException as e:
+        # ConnectionError, timeouts, etc. — usually OpenSearch down, wrong URL, or not ready yet.
+        status = 503
+        detail = (
+            f"facets failed: {e.__class__.__name__}: {e}. "
+            f"OpenSearch URL in use: {EVENTSTORE_URL!r}. "
+            "Start/health-check OpenSearch (e.g. docker compose up -d opensearch; "
+            "wait for healthy; from host curl http://localhost:9200). "
+            "Inside Docker, EVENTSTORE_OPENSEARCH_URL should be http://opensearch:9200."
+        )
+        raise HTTPException(status_code=status, detail=detail) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"facets failed: {e.__class__.__name__}")
+        raise HTTPException(status_code=500, detail=f"facets failed: {e.__class__.__name__}: {e}") from e
 
 
 @app.post("/correlation/dry_run")

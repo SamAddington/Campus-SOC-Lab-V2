@@ -9,6 +9,7 @@ import json
 import os
 import time
 import requests
+from requests.exceptions import ReadTimeout, RequestException
 
 app = FastAPI(title="WiCyS Simulator")
 
@@ -19,6 +20,11 @@ SCENARIOS_DIR = Path("/app/scenarios")
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://orchestrator:8021")
 AUDIT_URL = os.getenv("AUDIT_URL", "http://audit:8022")
 SOC_API_KEY = os.getenv("SOC_API_KEY", "change-me-dev-api-key")
+# Orchestrator runs collector → detector → OSINT → policy → LLM → audit; local Ollama can exceed 30s.
+try:
+    ORCHESTRATOR_HTTP_TIMEOUT = max(30, int(os.getenv("SIMULATOR_ORCHESTRATOR_TIMEOUT_SECONDS", "180") or "180"))
+except ValueError:
+    ORCHESTRATOR_HTTP_TIMEOUT = 180
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -58,7 +64,7 @@ def load_scenario(scenario_id: str) -> Dict[str, Any]:
     return data
 
 
-def post_json(url: str, payload: Dict[str, Any], timeout: int = 30) -> Dict[str, Any]:
+def post_json(url: str, payload: Dict[str, Any], *, timeout: int = 30) -> Dict[str, Any]:
     resp = requests.post(
         url,
         json=payload,
@@ -188,7 +194,46 @@ def run_scenario(req: RunScenarioRequest):
             "scenario_id": scenario["scenario_id"],
         }
 
-        response = post_json(target_url, request_body)
+        try:
+            response = post_json(target_url, request_body, timeout=ORCHESTRATOR_HTTP_TIMEOUT)
+        except ReadTimeout:
+            error_count += 1
+            results.append(
+                {
+                    "index": idx,
+                    "event_id": event_id,
+                    "ok": False,
+                    "status_code": 504,
+                    "response": {
+                        "detail": (
+                            f"Orchestrator read timed out after {ORCHESTRATOR_HTTP_TIMEOUT}s "
+                            "(pipeline includes LLM/OSINT). Increase SIMULATOR_ORCHESTRATOR_TIMEOUT_SECONDS "
+                            "or speed up Ollama/OSINT."
+                        )
+                    },
+                }
+            )
+            if req.stop_on_error:
+                break
+            if idx < len(events) and req.pace_ms > 0:
+                time.sleep(req.pace_ms / 1000.0)
+            continue
+        except RequestException as exc:
+            error_count += 1
+            results.append(
+                {
+                    "index": idx,
+                    "event_id": event_id,
+                    "ok": False,
+                    "status_code": 502,
+                    "response": {"detail": f"request failed: {exc.__class__.__name__}: {exc}"},
+                }
+            )
+            if req.stop_on_error:
+                break
+            if idx < len(events) and req.pace_ms > 0:
+                time.sleep(req.pace_ms / 1000.0)
+            continue
 
         if response["ok"]:
             success_count += 1
