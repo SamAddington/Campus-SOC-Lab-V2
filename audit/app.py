@@ -418,7 +418,323 @@ def _training_challenges() -> List[TrainingChallenge]:
             },
         },
     )
-    return [late_night, ddos]
+    acct_compromise = TrainingChallenge(
+        challenge_id="account-compromise-o365-google",
+        name="Account compromise (O365/Google)",
+        difficulty="beginner",
+        category="iam",
+        description="Investigate suspicious sign-ins and determine whether an account is compromised (impossible travel, risky locations, MFA prompts).",
+        briefing=(
+            "### Situation\n"
+            "It’s **08:05**. The helpdesk reports a surge of \"I got an MFA prompt I didn’t request\" calls. "
+            "Your IdP dashboard shows several recent sign-ins for the same user from **two distant geolocations** within minutes.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst. Your job is to quickly triage the suspected account compromise, document evidence, and recommend safe containment steps.\n\n"
+            "### What you should produce\n"
+            "1) Case with severity and a one-paragraph summary.\n"
+            "2) Indicators: sign-in timestamps, locations/IP ranges (as available), device/user-agent changes, MFA anomalies.\n"
+            "3) Scope: affected accounts, apps accessed, any risky actions (mailbox rules, OAuth grants).\n"
+            "4) Response plan: credential reset, session revocation, MFA rebind, risky sign-in policy review, comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- A sign-in timeline showing **impossible travel** and new device.\n"
+            "- A badge/flag for \"Impossible travel\" or \"Atypical location\".\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (sign-in timeline, location/device change, MFA prompt reports).", "required": True},
+            {"id": "scope_campaign", "title": "Scope the incident (accounts/apps/sessions) and propose next pivots.", "required": True},
+            {"id": "response_steps", "title": "Provide containment and recovery steps (revoke sessions, reset creds, MFA posture).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.75,
+            "weights": {"open_case": 0.25, "document_indicators": 0.25, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    bec = TrainingChallenge(
+        challenge_id="bec-mailbox-rules",
+        name="Business Email Compromise (BEC)",
+        difficulty="intermediate",
+        category="phishing",
+        description="Triage suspected mailbox compromise and malicious forwarding/rules; recommend safe steps and evidence preservation.",
+        briefing=(
+            "### Situation\n"
+            "Finance reports an \"urgent vendor update\" email thread that looks legitimate — but the bank account details changed. "
+            "Separately, mail admins see unusual **inbox rules** and **forwarding** configured on an executive mailbox.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst coordinating with email admins and finance. "
+            "Your goal is to determine whether this is BEC, preserve evidence, and stop further fraud.\n\n"
+            "### What you should produce\n"
+            "1) Case summary (what happened, who reported it, immediate risk).\n"
+            "2) Indicators: suspicious reply-to, forwarding target, new mailbox rules, OAuth grants, IP/device anomalies.\n"
+            "3) Scope: other mailboxes affected, similar rules, impacted vendor threads.\n"
+            "4) Response plan: disable forwarding/rules, reset creds, revoke sessions, finance fraud playbook, notify stakeholders.\n\n"
+            "### Example artifacts (training)\n"
+            "- A \"rule chain\" panel showing how mail was forwarded or hidden.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document mailbox rule/forwarding indicators and suspicious email headers/themes.", "required": True},
+            {"id": "scope_campaign", "title": "Scope affected mailboxes and threads; propose pivots (rules search, OAuth grants).", "required": True},
+            {"id": "response_steps", "title": "Provide containment steps + finance coordination and evidence preservation.", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.78,
+            "weights": {"open_case": 0.22, "document_indicators": 0.28, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    ransomware = TrainingChallenge(
+        challenge_id="ransomware-outbreak",
+        name="Ransomware outbreak",
+        difficulty="advanced",
+        category="malware",
+        description="Investigate a fast-moving ransomware outbreak; scope blast radius and propose containment and recovery steps.",
+        briefing=(
+            "### Situation\n"
+            "Users report files renamed with a new extension and ransom notes on shared drives. "
+            "EDR alerts show multiple hosts spawning encryption-like activity.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst on an incident bridge. Your goal is to rapidly assess impact, contain spread safely, "
+            "and document an initial recovery plan.\n\n"
+            "### What you should produce\n"
+            "1) Critical-severity case summary.\n"
+            "2) Indicators: affected hostnames, file extension, ransom note name, suspicious parent process, lateral movement hints.\n"
+            "3) Scope: blast radius (which hosts and shares), time of first impact, likely initial access vector.\n"
+            "4) Response plan: isolate hosts, disable compromised accounts, preserve evidence, backups, comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- A blast-radius host grid.\n"
+            "- An \"encryption progress\" meter.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case (critical) with short incident summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (extension, ransom note, suspicious process, impacted hosts/shares).", "required": True},
+            {"id": "scope_campaign", "title": "Scope blast radius and propose next pivots (patient zero, lateral spread).", "required": True},
+            {"id": "response_steps", "title": "Provide containment and recovery steps (isolation, backups, comms).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.80,
+            "weights": {"open_case": 0.20, "document_indicators": 0.30, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    endpoint_malware = TrainingChallenge(
+        challenge_id="endpoint-malware-infostealer",
+        name="Malware on endpoint (trojan/infostealer)",
+        difficulty="intermediate",
+        category="malware",
+        description="Triage suspicious endpoint behavior; document process tree and likely C2 beacons; propose safe containment.",
+        briefing=(
+            "### Situation\n"
+            "EDR flags a user workstation for suspicious child processes and repeated outbound connections to a rare domain. "
+            "The user reports a \"new PDF viewer\" install.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst. Your goal is to determine whether this is malware (trojan/infostealer), "
+            "document evidence, and recommend safe containment steps.\n\n"
+            "### What you should produce\n"
+            "1) Case summary with severity.\n"
+            "2) Indicators: process tree (parent/child), file path, hash (if present), outbound domain, periodic beacons.\n"
+            "3) Scope: other affected endpoints, user accounts, possible credential exposure.\n"
+            "4) Response plan: isolate endpoint, collect triage package, reset creds if needed, hunt across fleet.\n\n"
+            "### Example artifacts (training)\n"
+            "- A process tree panel.\n"
+            "- A C2 beacon ticker (connections every N seconds).\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (process tree, domain/C2 pattern, file path/hash).", "required": True},
+            {"id": "scope_campaign", "title": "Scope affected endpoints/accounts; propose hunt pivots.", "required": True},
+            {"id": "response_steps", "title": "Provide containment and triage steps (isolate, collect evidence, reset creds).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.77,
+            "weights": {"open_case": 0.22, "document_indicators": 0.28, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    cred_stuffing = TrainingChallenge(
+        challenge_id="credential-stuffing-bruteforce",
+        name="Credential stuffing / brute force",
+        difficulty="beginner",
+        category="iam",
+        description="Investigate repeated auth failures and lockouts; identify targeted accounts and recommend safe mitigations.",
+        briefing=(
+            "### Situation\n"
+            "Authentication logs show a sharp increase in failed logins against student and staff accounts. "
+            "Several accounts are now locked out. Traffic appears automated.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst coordinating with IAM. Your goal is to determine whether this is credential stuffing/brute force, "
+            "scope impacted accounts/apps, and recommend safe mitigations.\n\n"
+            "### What you should produce\n"
+            "1) Case summary and severity.\n"
+            "2) Indicators: failure rate, lockouts, top targeted usernames, source patterns (as available).\n"
+            "3) Scope: which apps/tenants are targeted; whether any successful logins occurred.\n"
+            "4) Response plan: tighten rate limits, MFA enforcement, password reset guidance, user comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- An auth heatmap (failures by minute and app).\n"
+            "- A lockout counter.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (failure spike, lockouts, targeted accounts/apps).", "required": True},
+            {"id": "scope_campaign", "title": "Scope impacted apps/accounts and confirm any successful compromises.", "required": True},
+            {"id": "response_steps", "title": "Provide mitigations (rate limits, MFA, password reset + comms).", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.75,
+            "weights": {"open_case": 0.25, "document_indicators": 0.25, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    web_app = TrainingChallenge(
+        challenge_id="web-app-attack",
+        name="Web app attack (SQLi/XSS/credential leak)",
+        difficulty="intermediate",
+        category="web",
+        description="Investigate suspicious WAF / app logs, identify affected endpoints, and propose mitigations and monitoring.",
+        briefing=(
+            "### Situation\n"
+            "The WAF shows a spike in blocked requests with payload-like patterns. "
+            "The application team reports elevated 500s on a login endpoint.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst coordinating with the app team. Your goal is to determine whether this is an active web attack "
+            "(SQLi/XSS/credential stuffing) and document impact.\n\n"
+            "### What you should produce\n"
+            "1) Case summary and severity.\n"
+            "2) Indicators: affected endpoint(s), WAF rule IDs/categories, error spike timeframe.\n"
+            "3) Scope: which apps/hosts are impacted; whether any suspicious successes occurred.\n"
+            "4) Response plan: tighten rules, patch/mitigate, add monitoring, coordinate comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- WAF/event spike visualization.\n"
+            "- Affected endpoint list.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (WAF spike, endpoint(s), error timeframe).", "required": True},
+            {"id": "scope_campaign", "title": "Scope impacted apps/hosts and propose pivots (logs, auth, DB).", "required": True},
+            {"id": "response_steps", "title": "Provide mitigations and monitoring steps with app-team coordination.", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.77,
+            "weights": {"open_case": 0.22, "document_indicators": 0.28, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    vuln_exploit = TrainingChallenge(
+        challenge_id="vulnerability-exploitation",
+        name="Vulnerability exploitation (critical CVE on edge)",
+        difficulty="intermediate",
+        category="vuln",
+        description="Investigate suspected exploitation of a critical CVE; assess patch gap and propose containment and patch plan.",
+        briefing=(
+            "### Situation\n"
+            "Threat intel reports active exploitation of a critical CVE affecting a common edge device/app. "
+            "Your telemetry shows suspicious requests consistent with exploit attempts.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst coordinating with infra. Your goal is to assess exposure (patch gap), "
+            "determine whether exploitation occurred, and recommend staged mitigations.\n\n"
+            "### What you should produce\n"
+            "1) Case summary and severity.\n"
+            "2) Indicators: exploit attempt patterns, targeted asset(s), suspicious responses.\n"
+            "3) Scope: which systems are vulnerable/unpatched; timeframe; any evidence of post-exploit activity.\n"
+            "4) Response plan: mitigations, patch sequencing, monitoring/hunt, comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- Patch gap meter (patched vs unpatched).\n"
+            "- Exploitation chain steps panel.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (attempt patterns, vulnerable assets, timeframe).", "required": True},
+            {"id": "scope_campaign", "title": "Scope patch gap and impacted systems; propose hunt pivots.", "required": True},
+            {"id": "response_steps", "title": "Provide mitigations + patch plan + monitoring steps.", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.77,
+            "weights": {"open_case": 0.22, "document_indicators": 0.28, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    exfil = TrainingChallenge(
+        challenge_id="data-exfiltration",
+        name="Data exfiltration",
+        difficulty="advanced",
+        category="exfil",
+        description="Investigate suspicious outbound data transfer; identify likely destinations and propose containment and evidence steps.",
+        briefing=(
+            "### Situation\n"
+            "Network monitoring detects a sustained spike in outbound data volume from a file server to rare external domains. "
+            "The pattern suggests possible data exfiltration.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst. Your goal is to assess whether the traffic is legitimate, "
+            "document likely destinations and impacted datasets, and recommend containment.\n\n"
+            "### What you should produce\n"
+            "1) Case summary and severity.\n"
+            "2) Indicators: bytes-out spike, destination domains/IPs (as available), source hosts/accounts.\n"
+            "3) Scope: what data may be affected; timeframe; whether other hosts show similar patterns.\n"
+            "4) Response plan: contain (egress controls), preserve evidence, notify stakeholders, hunt.\n\n"
+            "### Example artifacts (training)\n"
+            "- Exfil gauge (bytes out).\n"
+            "- Destination domain list.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (bytes-out spike, destinations, sources).", "required": True},
+            {"id": "scope_campaign", "title": "Scope impacted systems/data and propose pivots (DLP, auth, endpoint).", "required": True},
+            {"id": "response_steps", "title": "Provide containment + evidence preservation + notification steps.", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.80,
+            "weights": {"open_case": 0.20, "document_indicators": 0.30, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    insider = TrainingChallenge(
+        challenge_id="insider-misuse",
+        name="Insider misuse / improper access",
+        difficulty="intermediate",
+        category="insider",
+        description="Investigate unusual access patterns to sensitive resources; document evidence and propose a safe response with HR/legal coordination.",
+        briefing=(
+            "### Situation\n"
+            "A department reports unusual access to a sensitive shared folder outside normal hours. "
+            "Audit logs show a user accessing resources they don’t normally touch.\n\n"
+            "### Your role\n"
+            "You are the SOC analyst. Your goal is to document observable facts, minimize disruption, "
+            "and recommend a response that respects privacy, HR/legal coordination, and evidence handling.\n\n"
+            "### What you should produce\n"
+            "1) Case summary and severity.\n"
+            "2) Indicators: access timestamps, resources touched, deviation from baseline.\n"
+            "3) Scope: other accounts/resources involved; whether this is misconfiguration vs misuse.\n"
+            "4) Response plan: access review, least-privilege, monitoring, HR/legal engagement, comms.\n\n"
+            "### Example artifacts (training)\n"
+            "- Access graph (user → resource edges).\n"
+            "- An anomaly trend line.\n"
+        ),
+        objectives=[
+            {"id": "open_case", "title": "Open an investigation case with severity + short summary.", "required": True},
+            {"id": "document_indicators", "title": "Document indicators (resources accessed, off-hours, baseline deviation).", "required": True},
+            {"id": "scope_campaign", "title": "Scope accounts/resources; consider misconfig vs misuse; propose pivots.", "required": True},
+            {"id": "response_steps", "title": "Provide a safe response plan including HR/legal and evidence handling.", "required": True},
+        ],
+        rubric={
+            "pass_score": 0.77,
+            "weights": {"open_case": 0.22, "document_indicators": 0.28, "scope_campaign": 0.25, "response_steps": 0.25},
+        },
+    )
+
+    return [
+        late_night,
+        acct_compromise,
+        bec,
+        ransomware,
+        endpoint_malware,
+        cred_stuffing,
+        ddos,
+        web_app,
+        vuln_exploit,
+        exfil,
+        insider,
+    ]
 
 
 def _training_challenge_by_id(challenge_id: str) -> Optional[TrainingChallenge]:

@@ -300,6 +300,10 @@ manual/                      # Operator manuals (technical, training, technology
   training-manual-new-users.md
   whitepaper-technologies.md
 
+labs/                        # Student labs / assignments (how to complete Training challenges)
+  README.md
+  soc-training-labs.md
+
 docs/
   llm_teacher_student.md
   traffic_anomaly.md
