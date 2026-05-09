@@ -1,0 +1,9 @@
+{
+  "llm_default_mode": "student_only",
+  "llm_human_review_mode": "teacher_shadow",
+  "ollama_base_url": "http://ollama:11434",
+  "student_model": "llama3.2:1b",
+  "student_provider": "ollama",
+  "teacher_model": "",
+  "teacher_provider": "none"
+}

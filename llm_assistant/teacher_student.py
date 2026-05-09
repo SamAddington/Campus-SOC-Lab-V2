@@ -42,40 +42,201 @@ def _read_env_mode(name: str, default: LLMMode) -> LLMMode:
         return default
 
 
-TEACHER_PROVIDER = os.getenv("TEACHER_PROVIDER", "none")
-TEACHER_MODEL = os.getenv("TEACHER_MODEL", "")
-STUDENT_PROVIDER = os.getenv("STUDENT_PROVIDER", "ollama")
-STUDENT_MODEL = os.getenv("STUDENT_MODEL", os.getenv("OLLAMA_MODEL", "llama3.2"))
-
-DEFAULT_MODE = _read_env_mode("LLM_DEFAULT_MODE", LLMMode.STUDENT_ONLY)
-HUMAN_REVIEW_MODE = _read_env_mode("LLM_HUMAN_REVIEW_MODE", LLMMode.TEACHER_SHADOW)
-
 # Where to persist teacher shadow outputs for later distillation training.
 # The file lives on the ledger volume so it is already under audit control.
 SHADOW_LOG_PATH = Path(os.getenv("LLM_SHADOW_LOG", "/app/ledger/teacher_shadow.jsonl"))
 
+# Runtime provider settings can be changed from the console without granting the
+# frontend Docker access. The file lives on the same mounted ledger volume so it
+# survives a container recreate, while env vars remain the fallback source.
+RUNTIME_CONFIG_PATH = Path(
+    os.getenv("LLM_RUNTIME_CONFIG_PATH", "/app/ledger/llm_runtime_config.json")
+)
+_RUNTIME_CONFIG_KEYS = {
+    "teacher_provider",
+    "teacher_model",
+    "student_provider",
+    "student_model",
+    "ollama_base_url",
+    "llm_default_mode",
+    "llm_human_review_mode",
+}
+_CONFIG_LOCK = threading.RLock()
+_RUNTIME_CONFIG: Dict[str, str] = {}
+
+TEACHER_PROVIDER = ""
+TEACHER_MODEL = ""
+STUDENT_PROVIDER = ""
+STUDENT_MODEL = ""
+DEFAULT_MODE = LLMMode.STUDENT_ONLY
+HUMAN_REVIEW_MODE = LLMMode.TEACHER_SHADOW
+
 
 # ---------- Provider construction ---------- #
 
-def _safe_build(provider_name: str, model: str) -> LLMProvider:
+def _env_runtime_config() -> Dict[str, str]:
+    return {
+        "teacher_provider": os.getenv("TEACHER_PROVIDER", "none"),
+        "teacher_model": os.getenv("TEACHER_MODEL", ""),
+        "student_provider": os.getenv("STUDENT_PROVIDER", "ollama"),
+        "student_model": os.getenv("STUDENT_MODEL", os.getenv("OLLAMA_MODEL", "llama3.2")),
+        "ollama_base_url": os.getenv(
+            "OLLAMA_BASE_URL", "http://host.docker.internal:11434"
+        ),
+        "llm_default_mode": _read_env_mode(
+            "LLM_DEFAULT_MODE", LLMMode.STUDENT_ONLY
+        ).value,
+        "llm_human_review_mode": _read_env_mode(
+            "LLM_HUMAN_REVIEW_MODE", LLMMode.TEACHER_SHADOW
+        ).value,
+    }
+
+
+def _mode_value(raw: Any, default: LLMMode) -> str:
+    value = str(raw or "").strip().lower()
+    if not value:
+        return default.value
     try:
-        return build_provider(provider_name, model)
+        return LLMMode(value).value
+    except ValueError:
+        log.warning("Unknown LLM mode %r, falling back to %s", raw, default.value)
+        return default.value
+
+
+def _coerce_runtime_config(raw: Dict[str, Any]) -> Dict[str, str]:
+    base = _env_runtime_config()
+    config = dict(base)
+    for key in _RUNTIME_CONFIG_KEYS:
+        if key in raw and raw[key] is not None:
+            config[key] = str(raw[key]).strip()
+
+    config["teacher_provider"] = (config["teacher_provider"] or "none").lower()
+    config["student_provider"] = (config["student_provider"] or "none").lower()
+    config["ollama_base_url"] = (
+        config["ollama_base_url"] or "http://host.docker.internal:11434"
+    )
+    config["llm_default_mode"] = _mode_value(
+        config["llm_default_mode"], LLMMode.STUDENT_ONLY
+    )
+    config["llm_human_review_mode"] = _mode_value(
+        config["llm_human_review_mode"], LLMMode.TEACHER_SHADOW
+    )
+    return config
+
+
+def _read_runtime_config_file() -> Dict[str, Any]:
+    if not RUNTIME_CONFIG_PATH.exists():
+        return {}
+    try:
+        with open(RUNTIME_CONFIG_PATH, "r", encoding="utf-8") as f:
+            parsed = json.load(f)
+    except Exception as e:
+        log.warning("Could not read %s: %s", RUNTIME_CONFIG_PATH, e)
+        return {}
+    if not isinstance(parsed, dict):
+        log.warning("Ignoring non-object runtime config at %s", RUNTIME_CONFIG_PATH)
+        return {}
+    return {k: v for k, v in parsed.items() if k in _RUNTIME_CONFIG_KEYS}
+
+
+def _write_runtime_config_file(config: Dict[str, str]) -> None:
+    RUNTIME_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(RUNTIME_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def _safe_build(provider_name: str, model: str, ollama_base_url: str) -> LLMProvider:
+    try:
+        return build_provider(provider_name, model, ollama_base_url=ollama_base_url)
     except Exception as e:
         log.warning("Could not build provider %r (%s); using null.", provider_name, e)
         return build_provider("none", model)
 
 
-_TEACHER = _safe_build(TEACHER_PROVIDER, TEACHER_MODEL)
-_STUDENT = _safe_build(STUDENT_PROVIDER, STUDENT_MODEL)
+_TEACHER = build_provider("none", "")
+_STUDENT = build_provider("none", "")
+
+
+def _apply_runtime_config(config: Dict[str, str]) -> None:
+    global TEACHER_PROVIDER, TEACHER_MODEL, STUDENT_PROVIDER, STUDENT_MODEL
+    global DEFAULT_MODE, HUMAN_REVIEW_MODE, _TEACHER, _STUDENT
+
+    teacher = _safe_build(
+        config["teacher_provider"], config["teacher_model"], config["ollama_base_url"]
+    )
+    student = _safe_build(
+        config["student_provider"], config["student_model"], config["ollama_base_url"]
+    )
+
+    with _CONFIG_LOCK:
+        TEACHER_PROVIDER = config["teacher_provider"]
+        TEACHER_MODEL = config["teacher_model"]
+        STUDENT_PROVIDER = config["student_provider"]
+        STUDENT_MODEL = config["student_model"]
+        DEFAULT_MODE = LLMMode(config["llm_default_mode"])
+        HUMAN_REVIEW_MODE = LLMMode(config["llm_human_review_mode"])
+        _TEACHER = teacher
+        _STUDENT = student
+        _RUNTIME_CONFIG.clear()
+        _RUNTIME_CONFIG.update(config)
+
+
+def reload_runtime_config() -> Dict[str, Any]:
+    config = _coerce_runtime_config(
+        {**_env_runtime_config(), **_read_runtime_config_file()}
+    )
+    _apply_runtime_config(config)
+    return runtime_config_status()
+
+
+def update_runtime_config(patch: Dict[str, Any]) -> Dict[str, Any]:
+    with _CONFIG_LOCK:
+        current = dict(_RUNTIME_CONFIG) or _env_runtime_config()
+    config = _coerce_runtime_config({**current, **patch})
+    _write_runtime_config_file(config)
+    _apply_runtime_config(config)
+    return runtime_config_status()
+
+
+def reset_runtime_config() -> Dict[str, Any]:
+    try:
+        RUNTIME_CONFIG_PATH.unlink(missing_ok=True)
+    except Exception as e:
+        log.warning("Could not remove %s: %s", RUNTIME_CONFIG_PATH, e)
+    config = _coerce_runtime_config(_env_runtime_config())
+    _apply_runtime_config(config)
+    return runtime_config_status()
+
+
+def get_runtime_config() -> Dict[str, str]:
+    with _CONFIG_LOCK:
+        return dict(_RUNTIME_CONFIG)
+
+
+def runtime_config_status() -> Dict[str, Any]:
+    with _CONFIG_LOCK:
+        config = dict(_RUNTIME_CONFIG)
+    return {
+        **config,
+        "persisted": RUNTIME_CONFIG_PATH.exists(),
+        "runtime_config_path": str(RUNTIME_CONFIG_PATH),
+        "providers": provider_status(),
+    }
 
 
 def provider_status() -> Dict[str, Any]:
-    return {
-        "teacher": _TEACHER.describe(),
-        "student": _STUDENT.describe(),
-        "default_mode": DEFAULT_MODE.value,
-        "human_review_mode": HUMAN_REVIEW_MODE.value,
-    }
+    with _CONFIG_LOCK:
+        return {
+            "teacher": _TEACHER.describe(),
+            "student": _STUDENT.describe(),
+            "default_mode": DEFAULT_MODE.value,
+            "human_review_mode": HUMAN_REVIEW_MODE.value,
+            "ollama_base_url": _RUNTIME_CONFIG.get("ollama_base_url", ""),
+        }
+
+
+reload_runtime_config()
 
 
 # ---------- Prompt construction ---------- #
@@ -161,6 +322,67 @@ def _parse_and_validate(raw: str) -> Dict[str, Any]:
 def _invoke(provider: LLMProvider, prompt: str) -> Dict[str, Any]:
     raw = provider.generate_json(prompt)
     return _parse_and_validate(raw)
+
+
+def _current_teacher() -> LLMProvider:
+    with _CONFIG_LOCK:
+        return _TEACHER
+
+
+def _current_student() -> LLMProvider:
+    with _CONFIG_LOCK:
+        return _STUDENT
+
+
+def _ollama_hint(provider: LLMProvider) -> str:
+    model = provider.model or "<model>"
+    base_url = str(getattr(provider, "base_url", "") or "")
+    if "ollama:11434" in base_url:
+        return (
+            f"Start Docker Ollama with `docker compose up -d ollama`, then run "
+            f"`docker compose exec ollama ollama pull {model}`."
+        )
+    return (
+        f"Run `ollama pull {model}` on the host, or start Docker Ollama with "
+        f"`docker compose up -d ollama`, pull the model there, and set Ollama "
+        f"base URL to `http://ollama:11434` in Settings."
+    )
+
+
+def _friendly_error(provider: LLMProvider, e: Exception) -> str:
+    msg = str(e)
+    lower = msg.lower()
+    provider_name = getattr(provider, "name", "")
+
+    if provider_name == "ollama":
+        base_url = str(getattr(provider, "base_url", "") or "the configured Ollama URL")
+        if "404" in lower or "not found" in lower or "pull" in lower:
+            return (
+                f"Ollama could not find model `{provider.model}`. "
+                f"{_ollama_hint(provider)}"
+            )
+        if (
+            "unreachable" in lower
+            or "connection refused" in lower
+            or "name or service not known" in lower
+            or "nodename nor servname" in lower
+            or "failed to establish" in lower
+            or "max retries exceeded" in lower
+        ):
+            return (
+                f"Ollama is not reachable at `{base_url}`. "
+                f"{_ollama_hint(provider)}"
+            )
+
+    if provider_name == "openai" or "openai" in lower:
+        if "api key" in lower or "not configured" in lower:
+            return "OpenAI-compatible provider is selected but no API key is set. Open Settings or set OPENAI_API_KEY."
+
+    if provider_name == "anthropic" or "anthropic" in lower:
+        if "api key" in lower or "not configured" in lower:
+            return "Anthropic provider is selected but no API key is set. Open Settings or set ANTHROPIC_API_KEY."
+
+    return msg
 
 
 # ---------- Training grading (MVP) ---------- #
@@ -251,30 +473,32 @@ def grade_training(challenge: Dict[str, Any], run: Dict[str, Any], actions: list
     """
     prompt = _build_training_grade_prompt(challenge, run, actions)
 
-    if _TEACHER.enabled:
+    teacher = _current_teacher()
+    if teacher.enabled:
         try:
-            g = _invoke_training_grade(_TEACHER, prompt)
+            g = _invoke_training_grade(teacher, prompt)
             return {
                 "grade": g,
                 "llm_used": True,
-                "llm_reason": f"Graded by teacher {_TEACHER.name}:{_TEACHER.model}.",
+                "llm_reason": f"Graded by teacher {teacher.name}:{teacher.model}.",
                 "llm_tier": "teacher",
-                "llm_provider": _TEACHER.name,
-                "llm_model": _TEACHER.model,
+                "llm_provider": teacher.name,
+                "llm_model": teacher.model,
             }
         except LLMProviderError as e:
             log.info("Teacher grading failed: %s", e)
 
-    if _STUDENT.enabled:
+    student = _current_student()
+    if student.enabled:
         try:
-            g = _invoke_training_grade(_STUDENT, prompt)
+            g = _invoke_training_grade(student, prompt)
             return {
                 "grade": g,
                 "llm_used": True,
-                "llm_reason": f"Graded by student {_STUDENT.name}:{_STUDENT.model}.",
+                "llm_reason": f"Graded by student {student.name}:{student.model}.",
                 "llm_tier": "student",
-                "llm_provider": _STUDENT.name,
-                "llm_model": _STUDENT.model,
+                "llm_provider": student.name,
+                "llm_model": student.model,
             }
         except LLMProviderError as e:
             log.info("Student grading failed: %s", e)
@@ -331,7 +555,11 @@ def safe_fallback(req: LLMAssistRequestV1, reason: str) -> LLMAssistResponseV1:
 _shadow_lock = threading.Lock()
 
 
-def _log_shadow(req: LLMAssistRequestV1, teacher_output: Dict[str, Any]) -> None:
+def _log_shadow(
+    req: LLMAssistRequestV1,
+    teacher_output: Dict[str, Any],
+    teacher: LLMProvider,
+) -> None:
     """Append a teacher output alongside the request to the shadow log.
 
     Only triggered when operating mode is TEACHER_SHADOW. The shadow log is
@@ -343,8 +571,8 @@ def _log_shadow(req: LLMAssistRequestV1, teacher_output: Dict[str, Any]) -> None
         record = {
             "request": req.model_dump(mode="json"),
             "teacher_output": teacher_output,
-            "teacher_provider": _TEACHER.name,
-            "teacher_model": _TEACHER.model,
+            "teacher_provider": teacher.name,
+            "teacher_model": teacher.model,
         }
         with _shadow_lock, open(SHADOW_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
@@ -353,13 +581,14 @@ def _log_shadow(req: LLMAssistRequestV1, teacher_output: Dict[str, Any]) -> None
 
 
 def _shadow_fire_and_forget(req: LLMAssistRequestV1, prompt: str) -> None:
-    if not _TEACHER.enabled:
+    teacher = _current_teacher()
+    if not teacher.enabled:
         return
 
     def _run():
         try:
-            out = _invoke(_TEACHER, prompt)
-            _log_shadow(req, out)
+            out = _invoke(teacher, prompt)
+            _log_shadow(req, out, teacher)
         except LLMProviderError as e:
             log.info("Teacher shadow skipped: %s", e)
         except Exception as e:
@@ -373,9 +602,12 @@ def _shadow_fire_and_forget(req: LLMAssistRequestV1, prompt: str) -> None:
 def _select_mode(req: LLMAssistRequestV1) -> LLMMode:
     if req.mode is not None:
         return req.mode
+    with _CONFIG_LOCK:
+        human_review_mode = HUMAN_REVIEW_MODE
+        default_mode = DEFAULT_MODE
     if req.requires_human_review:
-        return HUMAN_REVIEW_MODE
-    return DEFAULT_MODE
+        return human_review_mode
+    return default_mode
 
 
 def _response_from(
@@ -396,37 +628,46 @@ def _response_from(
     )
 
 
-def _try_student(prompt: str) -> Optional[LLMAssistResponseV1]:
-    if not _STUDENT.enabled:
-        return None
+def _try_student(prompt: str) -> Tuple[Optional[LLMAssistResponseV1], Optional[str]]:
+    student = _current_student()
+    if not student.enabled:
+        return None, _friendly_error(student, LLMProviderError("student provider disabled or not configured"))
     try:
-        parsed = _invoke(_STUDENT, prompt)
+        parsed = _invoke(student, prompt)
     except LLMProviderError as e:
-        log.info("Student failed: %s", e)
-        return None
-    return _response_from(
-        parsed,
-        tier=LLMTier.STUDENT,
-        provider=_STUDENT,
-        reason=f"Generated by student {_STUDENT.name}:{_STUDENT.model}.",
+        reason = _friendly_error(student, e)
+        log.info("Student failed: %s", reason)
+        return None, reason
+    return (
+        _response_from(
+            parsed,
+            tier=LLMTier.STUDENT,
+            provider=student,
+            reason=f"Generated by student {student.name}:{student.model}.",
+        ),
+        None,
     )
 
 
-def _try_teacher(prompt: str) -> Tuple[Optional[LLMAssistResponseV1], Optional[Dict[str, Any]]]:
-    if not _TEACHER.enabled:
-        return None, None
+def _try_teacher(
+    prompt: str,
+) -> Tuple[Optional[LLMAssistResponseV1], Optional[Dict[str, Any]], Optional[str]]:
+    teacher = _current_teacher()
+    if not teacher.enabled:
+        return None, None, _friendly_error(teacher, LLMProviderError("teacher provider disabled or not configured"))
     try:
-        parsed = _invoke(_TEACHER, prompt)
+        parsed = _invoke(teacher, prompt)
     except LLMProviderError as e:
-        log.info("Teacher failed: %s", e)
-        return None, None
+        reason = _friendly_error(teacher, e)
+        log.info("Teacher failed: %s", reason)
+        return None, None, reason
     resp = _response_from(
         parsed,
         tier=LLMTier.TEACHER,
-        provider=_TEACHER,
-        reason=f"Generated by teacher {_TEACHER.name}:{_TEACHER.model}.",
+        provider=teacher,
+        reason=f"Generated by teacher {teacher.name}:{teacher.model}.",
     )
-    return resp, parsed
+    return resp, parsed, None
 
 
 def route(req: LLMAssistRequestV1) -> LLMAssistResponseV1:
@@ -434,42 +675,51 @@ def route(req: LLMAssistRequestV1) -> LLMAssistResponseV1:
     prompt = build_prompt(req)
 
     if mode == LLMMode.TEACHER_ONLY:
-        resp, _ = _try_teacher(prompt)
+        resp, _, teacher_error = _try_teacher(prompt)
         if resp is not None:
             return resp
         # Teacher unavailable -> try student so triage is never blocked.
-        student_resp = _try_student(prompt)
+        student_resp, student_error = _try_student(prompt)
         if student_resp is not None:
             return student_resp
-        return safe_fallback(req, "teacher_only mode but teacher+student both unavailable")
+        return safe_fallback(
+            req,
+            teacher_error or student_error or "teacher_only mode but teacher+student both unavailable",
+        )
 
     if mode == LLMMode.STUDENT_ONLY:
-        student_resp = _try_student(prompt)
+        student_resp, student_error = _try_student(prompt)
         if student_resp is not None:
             return student_resp
-        return safe_fallback(req, "student unavailable")
+        return safe_fallback(req, student_error or "student unavailable")
 
     if mode == LLMMode.TEACHER_SHADOW:
         # Student responds to the user; teacher runs in background.
         _shadow_fire_and_forget(req, prompt)
-        student_resp = _try_student(prompt)
+        student_resp, student_error = _try_student(prompt)
         if student_resp is not None:
             return student_resp
         # Student unavailable: we may wait briefly on teacher so the user
         # still gets a response, but only because the shadow path already
         # started the teacher call.
-        teacher_resp, _ = _try_teacher(prompt)
+        teacher_resp, _, teacher_error = _try_teacher(prompt)
         if teacher_resp is not None:
             return teacher_resp
-        return safe_fallback(req, "shadow mode but both tiers unavailable")
+        return safe_fallback(
+            req,
+            student_error or teacher_error or "shadow mode but both tiers unavailable",
+        )
 
     if mode == LLMMode.TEACHER_THEN_STUDENT_REFINE:
-        teacher_resp, teacher_parsed = _try_teacher(prompt)
+        teacher_resp, teacher_parsed, teacher_error = _try_teacher(prompt)
         if teacher_resp is None:
-            student_resp = _try_student(prompt)
+            student_resp, student_error = _try_student(prompt)
             if student_resp is not None:
                 return student_resp
-            return safe_fallback(req, "refine mode but teacher+student both unavailable")
+            return safe_fallback(
+                req,
+                teacher_error or student_error or "refine mode but teacher+student both unavailable",
+            )
 
         # Ask student to rewrite plain-language pieces while preserving
         # structure. If the refine call fails, return the teacher output.
@@ -478,8 +728,9 @@ def route(req: LLMAssistRequestV1) -> LLMAssistResponseV1:
             + "\n\nPrior draft (rewrite it for clarity; keep the same facts and next_steps):\n"
             + json.dumps(teacher_parsed)
         )
+        student = _current_student()
         try:
-            refined = _invoke(_STUDENT, refine_prompt) if _STUDENT.enabled else None
+            refined = _invoke(student, refine_prompt) if student.enabled else None
         except LLMProviderError:
             refined = None
 
@@ -491,10 +742,10 @@ def route(req: LLMAssistRequestV1) -> LLMAssistResponseV1:
         return _response_from(
             refined,
             tier=LLMTier.STUDENT,
-            provider=_STUDENT,
+            provider=student,
             reason=(
-                f"Teacher {_TEACHER.name}:{_TEACHER.model} drafted; "
-                f"student {_STUDENT.name}:{_STUDENT.model} refined."
+                f"Teacher {teacher_resp.llm_provider}:{teacher_resp.llm_model} drafted; "
+                f"student {student.name}:{student.model} refined."
             ),
         )
 

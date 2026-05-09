@@ -15,13 +15,13 @@ __all__ = [
 ]
 
 
-def build_provider(name: str, model: str) -> LLMProvider:
+def build_provider(name: str, model: str, ollama_base_url: str | None = None) -> LLMProvider:
     """Factory. ``name`` is one of: ollama, openai, anthropic, none."""
     n = (name or "").strip().lower()
     if n in ("", "none", "off", "disabled"):
         return NullProvider(model=model)
     if n == "ollama":
-        return OllamaProvider(model=model)
+        return OllamaProvider(model=model, base_url=ollama_base_url)
     if n in ("openai", "openai-compatible", "openai_compatible", "groq", "openrouter"):
         return OpenAIProvider(model=model)
     if n == "anthropic":
