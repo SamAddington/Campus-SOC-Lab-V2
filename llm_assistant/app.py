@@ -18,7 +18,15 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, "/app")
 from shared.schemas import LLMAssistRequestV1
 
-from teacher_student import provider_status, route, safe_fallback, grade_training
+from teacher_student import (
+    grade_training,
+    provider_status,
+    reset_runtime_config,
+    route,
+    runtime_config_status,
+    safe_fallback,
+    update_runtime_config,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("llm_assistant")
@@ -54,6 +62,16 @@ class TrainingGradeResponse(BaseModel):
     llm_model: Optional[str] = None
 
 
+class LLMRuntimeConfigRequest(BaseModel):
+    teacher_provider: Optional[str] = None
+    teacher_model: Optional[str] = None
+    student_provider: Optional[str] = None
+    student_model: Optional[str] = None
+    ollama_base_url: Optional[str] = None
+    llm_default_mode: Optional[str] = None
+    llm_human_review_mode: Optional[str] = None
+
+
 @app.get("/health")
 def health() -> Dict[str, Any]:
     status = provider_status()
@@ -63,6 +81,21 @@ def health() -> Dict[str, Any]:
 @app.get("/providers")
 def providers() -> Dict[str, Any]:
     return provider_status()
+
+
+@app.get("/config")
+def config() -> Dict[str, Any]:
+    return runtime_config_status()
+
+
+@app.post("/config")
+def update_config(req: LLMRuntimeConfigRequest) -> Dict[str, Any]:
+    return update_runtime_config(req.model_dump(exclude_unset=True))
+
+
+@app.post("/config/reset")
+def reset_config() -> Dict[str, Any]:
+    return reset_runtime_config()
 
 
 @app.post("/assist")

@@ -24,6 +24,16 @@ x-auth-env: &auth_env
   SOC_OIDC_JWKS_URL: ${SOC_OIDC_JWKS_URL:-}
 
 services:
+  ollama:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-latest}
+    profiles:
+      - local-ollama
+    ports:
+      # Avoid colliding with a host Ollama already bound to 11434.
+      - "${OLLAMA_HOST_PORT:-11435}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   opensearch:
     image: opensearchproject/opensearch:2.14.0
     environment:
@@ -298,6 +308,7 @@ services:
       LLM_DEFAULT_MODE: ${LLM_DEFAULT_MODE:-student_only}
       LLM_HUMAN_REVIEW_MODE: ${LLM_HUMAN_REVIEW_MODE:-teacher_shadow}
       LLM_SHADOW_LOG: /app/ledger/teacher_shadow.jsonl
+      LLM_RUNTIME_CONFIG_PATH: ${LLM_RUNTIME_CONFIG_PATH:-/app/ledger/llm_runtime_config.json}
 
   distiller:
     build: ./distiller
@@ -500,6 +511,9 @@ services:
       TRAFFIC_SYNTHETIC_ENABLED: ${TRAFFIC_SYNTHETIC_ENABLED:-0}
     depends_on:
       - collector
+
+volumes:
+  ollama_data:
 
 # Default Compose network is `{project}_default` (no fixed name) so it does not collide
 # with an unrelated existing docker network named `wicys_soc_net`.

@@ -168,6 +168,7 @@ export type LLMProviderInfo = {
   provider: string;
   model: string;
   enabled: boolean;
+  base_url?: string;
   [k: string]: unknown;
 };
 
@@ -176,8 +177,36 @@ export type LLMProvidersStatus = {
   student: LLMProviderInfo;
   default_mode: string;
   human_review_mode: string;
+  ollama_base_url?: string;
   [k: string]: unknown;
 };
+
+export type LLMRuntimeConfig = {
+  teacher_provider: string;
+  teacher_model: string;
+  student_provider: string;
+  student_model: string;
+  ollama_base_url: string;
+  llm_default_mode: string;
+  llm_human_review_mode: string;
+  persisted?: boolean;
+  runtime_config_path?: string;
+  providers?: LLMProvidersStatus;
+  [k: string]: unknown;
+};
+
+export type LLMRuntimeConfigUpdate = Partial<
+  Pick<
+    LLMRuntimeConfig,
+    | "teacher_provider"
+    | "teacher_model"
+    | "student_provider"
+    | "student_model"
+    | "ollama_base_url"
+    | "llm_default_mode"
+    | "llm_human_review_mode"
+  >
+>;
 
 export type LLMAssistRequest = {
   event_id: string;
@@ -479,6 +508,14 @@ export const api = {
 
   // LLM assistant
   llmProviders: () => request<LLMProvidersStatus>(`/api/llm/providers`),
+  llmConfig: () => request<LLMRuntimeConfig>(`/api/llm/config`),
+  llmUpdateConfig: (body: LLMRuntimeConfigUpdate) =>
+    request<LLMRuntimeConfig>(`/api/llm/config`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  llmResetConfig: () =>
+    request<LLMRuntimeConfig>(`/api/llm/config/reset`, { method: "POST" }),
   llmAssist: (body: LLMAssistRequest) =>
     request<LLMAssistResponse>(`/api/llm/assist`, {
       method: "POST",

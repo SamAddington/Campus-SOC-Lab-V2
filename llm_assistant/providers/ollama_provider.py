@@ -10,9 +10,9 @@ class OllamaProvider(LLMProvider):
 
     name = "ollama"
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, base_url: str | None = None):
         super().__init__(model=model)
-        self.base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
     @property
     def enabled(self) -> bool:
@@ -34,7 +34,7 @@ class OllamaProvider(LLMProvider):
         try:
             resp = requests.post(url, json=payload, timeout=timeout)
         except requests.RequestException as e:
-            raise LLMProviderError(f"Ollama unreachable: {e}") from e
+            raise LLMProviderError(f"Ollama unreachable at {self.base_url}: {e}") from e
 
         try:
             data = resp.json()
@@ -44,9 +44,16 @@ class OllamaProvider(LLMProvider):
             ) from e
 
         if not resp.ok:
-            raise LLMProviderError(f"Ollama error: {data}")
+            raise LLMProviderError(
+                f"Ollama error at {url}: HTTP {resp.status_code}: {data}"
+            )
 
         text = (data.get("response") or "").strip()
         if not text:
             raise LLMProviderError("Ollama returned empty response")
         return text
+
+    def describe(self) -> dict:
+        info = super().describe()
+        info["base_url"] = self.base_url
+        return info

@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
-import { Save, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Save, RotateCcw, CheckCircle2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { useSettings, DEFAULT_SETTINGS, type Settings as S } from "@/lib/settings";
+import { api } from "@/lib/api";
 
 const SOC_API_KEY_STORAGE_KEY = "soc_api_key";
+const HOST_OLLAMA_BASE_URL = "http://host.docker.internal:11434";
+const DOCKER_OLLAMA_BASE_URL = "http://ollama:11434";
+const PROVIDERS = ["ollama", "openai", "anthropic", "none"] as const;
+const LLM_MODES = [
+  "student_only",
+  "teacher_only",
+  "teacher_shadow",
+  "teacher_then_student_refine",
+] as const;
+
+function coerceProvider(value: unknown, fallback: S["studentProvider"]): S["studentProvider"] {
+  return PROVIDERS.includes(value as S["studentProvider"]) ? (value as S["studentProvider"]) : fallback;
+}
+
+function coerceMode(value: unknown, fallback: S["llmDefaultMode"]): S["llmDefaultMode"] {
+  return LLM_MODES.includes(value as S["llmDefaultMode"]) ? (value as S["llmDefaultMode"]) : fallback;
+}
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -11,6 +29,9 @@ export function Settings() {
   const [socApiKey, setSocApiKey] = useState<string>("");
   const [storedSocApiKey, setStoredSocApiKey] = useState<string>("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [llmReloading, setLlmReloading] = useState(false);
+  const [llmReloadErr, setLlmReloadErr] = useState<string | null>(null);
+  const [llmReloadMessage, setLlmReloadMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(settings);
@@ -22,13 +43,36 @@ export function Settings() {
     setStoredSocApiKey(stored);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.llmConfig()
+      .then((cfg) => {
+        if (cancelled) return;
+        setDraft((prev) => ({
+          ...prev,
+          studentProvider: coerceProvider(cfg.student_provider, prev.studentProvider),
+          studentModel: cfg.student_model || prev.studentModel,
+          ollamaBaseUrl: cfg.ollama_base_url || prev.ollamaBaseUrl,
+          teacherProvider: coerceProvider(cfg.teacher_provider, prev.teacherProvider),
+          teacherModel: cfg.teacher_model ?? prev.teacherModel,
+          llmDefaultMode: coerceMode(cfg.llm_default_mode, prev.llmDefaultMode),
+          llmHumanReviewMode: coerceMode(cfg.llm_human_review_mode, prev.llmHumanReviewMode),
+        }));
+      })
+      .catch(() => {
+        /* Older llm_assistant images may not have /config yet. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const dirty =
     JSON.stringify(draft) !== JSON.stringify(settings) ||
     socApiKey !== storedSocApiKey;
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const sanitized: S = {
+  function sanitizeDraft(): S {
+    return {
       programName: draft.programName.trim() || DEFAULT_SETTINGS.programName,
       programSubtitle: draft.programSubtitle.trim() || DEFAULT_SETTINGS.programSubtitle,
       analystName: draft.analystName.trim() || DEFAULT_SETTINGS.analystName,
@@ -45,6 +89,7 @@ export function Settings() {
 
       studentProvider: draft.studentProvider,
       studentModel: draft.studentModel.trim(),
+      ollamaBaseUrl: draft.ollamaBaseUrl.trim() || DEFAULT_SETTINGS.ollamaBaseUrl,
       teacherProvider: draft.teacherProvider,
       teacherModel: draft.teacherModel.trim(),
       llmDefaultMode: draft.llmDefaultMode,
@@ -65,6 +110,9 @@ export function Settings() {
       deploymentProfile: draft.deploymentProfile,
       gpuEnabledForLocalLlm: Boolean(draft.gpuEnabledForLocalLlm),
     };
+  }
+
+  function saveLocalSettings(sanitized: S) {
     update(sanitized);
     if (socApiKey.trim()) {
       const trimmed = socApiKey.trim();
@@ -78,6 +126,40 @@ export function Settings() {
     setDraft(sanitized);
     setSavedAt(Date.now());
     globalThis.setTimeout(() => setSavedAt((t) => (t && Date.now() - t > 2000 ? null : t)), 2200);
+    return sanitized;
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLlmReloadErr(null);
+    setLlmReloadMessage(null);
+    saveLocalSettings(sanitizeDraft());
+  }
+
+  async function onSaveAndReloadLlm() {
+    const sanitized = saveLocalSettings(sanitizeDraft());
+    setLlmReloading(true);
+    setLlmReloadErr(null);
+    setLlmReloadMessage(null);
+    try {
+      const status = await api.llmUpdateConfig({
+        student_provider: sanitized.studentProvider,
+        student_model: sanitized.studentModel,
+        ollama_base_url: sanitized.ollamaBaseUrl,
+        teacher_provider: sanitized.teacherProvider,
+        teacher_model: sanitized.teacherModel,
+        llm_default_mode: sanitized.llmDefaultMode,
+        llm_human_review_mode: sanitized.llmHumanReviewMode,
+      });
+      const student = status.providers?.student;
+      setLlmReloadMessage(
+        `LLM service reloaded: ${student?.provider ?? status.student_provider}/${student?.model ?? status.student_model}`,
+      );
+    } catch (e) {
+      setLlmReloadErr((e as Error).message);
+    } finally {
+      setLlmReloading(false);
+    }
   }
 
   function onReset() {
@@ -94,8 +176,8 @@ export function Settings() {
       <header>
         <h1 className="text-xl font-semibold text-text">Settings</h1>
         <p className="mt-1 text-sm text-subtle">
-          Personalize the console. These values are stored in your browser only
-          (<span className="mono">localStorage</span>) — they never leave your machine.
+          Personalize the console. Most values are stored in browser{" "}
+          <span className="mono">localStorage</span>; the LLM section can also reload the backend runtime.
         </p>
       </header>
 
@@ -276,7 +358,7 @@ export function Settings() {
 
         <Card
           title="LLM providers (Teacher / Student)"
-          subtitle="These settings are notes for operators; backend provider selection is set via environment variables."
+          subtitle="Save locally, or save and reload the LLM assistant so backend provider selection changes immediately."
         >
           <div className="grid gap-4 md:grid-cols-2">
             <SelectField
@@ -300,6 +382,33 @@ export function Settings() {
               maxLength={80}
               mono
             />
+            <div className="md:col-span-2">
+              <Field
+                label="Ollama base URL"
+                hint="URL reachable from the llm_assistant container. Docker Desktop on Windows typically uses host.docker.internal."
+                value={draft.ollamaBaseUrl}
+                onChange={(v) => setDraft({ ...draft, ollamaBaseUrl: v })}
+                placeholder="http://host.docker.internal:11434"
+                maxLength={160}
+                mono
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-muted px-2 py-1 text-[11px] text-subtle hover:text-text"
+                  onClick={() => setDraft({ ...draft, ollamaBaseUrl: HOST_OLLAMA_BASE_URL })}
+                >
+                  Host Ollama
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-muted px-2 py-1 text-[11px] text-subtle hover:text-text"
+                  onClick={() => setDraft({ ...draft, ollamaBaseUrl: DOCKER_OLLAMA_BASE_URL })}
+                >
+                  Docker Ollama
+                </button>
+              </div>
+            </div>
             <SelectField
               label="Teacher provider"
               hint="Maps to TEACHER_PROVIDER. Hosted teachers send prompts externally."
@@ -345,6 +454,27 @@ export function Settings() {
                 { value: "teacher_then_student_refine", label: "teacher_then_student_refine" },
               ]}
             />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="btn"
+              onClick={onSaveAndReloadLlm}
+              disabled={llmReloading}
+            >
+              <RefreshCw size={14} className={llmReloading ? "animate-spin" : ""} />
+              {llmReloading ? "Reloading LLM..." : "Save & reload LLM service"}
+            </button>
+            {llmReloadMessage && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-sev-low">
+                <CheckCircle2 size={14} /> {llmReloadMessage}
+              </span>
+            )}
+            {llmReloadErr && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-sev-critical">
+                <AlertTriangle size={14} /> {llmReloadErr}
+              </span>
+            )}
           </div>
         </Card>
 
@@ -449,7 +579,7 @@ export function Settings() {
             />
             <ToggleField
               label="GPU for local LLM inference"
-              hint="If using Ollama locally, enable GPU on the host; containers call Ollama at OLLAMA_BASE_URL."
+              hint="If using Ollama locally, enable GPU on the host; the LLM assistant calls the Ollama base URL above."
               checked={draft.gpuEnabledForLocalLlm}
               onChange={(v) => setDraft({ ...draft, gpuEnabledForLocalLlm: v })}
             />
@@ -474,7 +604,7 @@ export function Settings() {
         </div>
       </form>
 
-      <Card title="Backend configuration (read-only)">
+      <Card title="Backend configuration">
         <ul className="list-disc space-y-1 pl-5 text-sm text-subtle">
           <li>
             Protected APIs require a shared key via <span className="mono">SOC_API_KEY</span>.
@@ -495,11 +625,10 @@ export function Settings() {
             <span className="mono">LLM_ASSISTANT_URL</span> (defaults assume docker-compose service names).
           </li>
           <li>
-            LLM routing is configured via <span className="mono">LLM_DEFAULT_MODE</span> /{" "}
-            <span className="mono">LLM_HUMAN_REVIEW_MODE</span> and providers{" "}
-            (<span className="mono">STUDENT_PROVIDER</span>/<span className="mono">STUDENT_MODEL</span>,{" "}
-            <span className="mono">TEACHER_PROVIDER</span>/<span className="mono">TEACHER_MODEL</span>). Teacher shadow
-            outputs persist to <span className="mono">LLM_SHADOW_LOG</span>.
+            LLM routing defaults come from <span className="mono">LLM_DEFAULT_MODE</span> /{" "}
+            <span className="mono">LLM_HUMAN_REVIEW_MODE</span> and provider env vars, but the
+            LLM section can persist runtime overrides through <span className="mono">/api/llm/config</span>.
+            Teacher shadow outputs persist to <span className="mono">LLM_SHADOW_LOG</span>.
           </li>
           <li>
             For privacy-preserving AI usage, keep <span className="mono">TEACHER_PROVIDER=none</span>{" "}

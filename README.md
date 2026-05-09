@@ -60,12 +60,12 @@ Important: enabling a hosted LLM teacher (`TEACHER_PROVIDER=openai|anthropic`) s
 
 The console's **Settings** page stores operator preferences in browser `localStorage`. It now includes sections for:
 
-- **LLM providers (local notes)**: teacher/student provider/model and routing modes. Backend is still configured via env vars.
+- **LLM providers**: teacher/student provider/model, Ollama base URL, and routing modes. The console can persist runtime LLM overrides and reload the LLM assistant.
 - **Threat intel & OSINT keys (local reference)**: NVD, MalwareBazaar, Tavily (intended for future integrations). Prefer env/secret stores in real deployments.
 - **Deployment profile**: how you intend to run orchestration at runtime and whether local LLM inference is GPU-accelerated.
 - **Neurosymbolic guardrails (posture)**: strictness / hosted-teacher allowance as operator guidance.
 
-These settings are primarily to keep the *operational intent* explicit and auditable; they do not automatically reconfigure running containers.
+Most settings are primarily to keep the *operational intent* explicit and auditable. The LLM provider section is the exception: **Save & reload LLM service** writes a runtime config file and rebuilds the LLM providers in the running assistant process.
 
 ## Core functionality
 
@@ -160,6 +160,17 @@ Two complementary simulators:
 | `teacher_then_student_refine`     | Teacher drafts, student rewrites for clarity without inventing new facts.                   |
 
 If all providers are disabled or misbehave, the router falls back to a deterministic template with `llm_used=false`, `llm_tier=fallback`.
+
+**Ollama placement**
+
+By default the LLM assistant reaches a host-installed Ollama at `http://host.docker.internal:11434`. You can also run Ollama as a Compose service:
+
+```powershell
+docker compose up -d ollama
+docker compose exec ollama ollama pull llama3.2:1b
+```
+
+Then set **Settings → LLM providers → Ollama base URL** to `http://ollama:11434` and click **Save & reload LLM service**. The service publishes host port `${OLLAMA_HOST_PORT:-11435}` to avoid colliding with a host Ollama on `11434`.
 
 **Invariants**
 
@@ -384,6 +395,8 @@ Defined in `docker-compose.yml` / `.env.example`:
 | `AUDIT_RETENTION_DAYS`          | audit              | `90`                             | Automatic retention horizon for ledger cleanup              |
 | `TEACHER_PROVIDER`/`TEACHER_MODEL` | llm_assistant   | `none` / ``                      | Teacher LLM config                                          |
 | `STUDENT_PROVIDER`/`STUDENT_MODEL` | llm_assistant   | `ollama` / `llama3.2`            | Student LLM config                                          |
+| `OLLAMA_BASE_URL`/`OLLAMA_HOST_PORT` | llm_assistant/ollama | `http://host.docker.internal:11434` / `11435` | Host or Docker Ollama routing                          |
+| `LLM_RUNTIME_CONFIG_PATH`          | llm_assistant   | `/app/ledger/llm_runtime_config.json` | Runtime LLM overrides saved from the console                |
 | `LLM_DEFAULT_MODE`              | llm_assistant      | `student_only`                   | Routing mode for normal traffic                             |
 | `LLM_HUMAN_REVIEW_MODE`         | llm_assistant      | `teacher_shadow`                 | Routing mode when `requires_human_review=true`              |
 | `LLM_SHADOW_LOG`                | llm_assistant      | `/app/ledger/teacher_shadow.jsonl` | Shadow output path                                        |

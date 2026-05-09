@@ -28,6 +28,7 @@ export type Settings = {
   // LLM providers (console guidance + local notes; backend is configured via env)
   studentProvider: "ollama" | "openai" | "anthropic" | "none";
   studentModel: string;
+  ollamaBaseUrl: string;
   teacherProvider: "ollama" | "openai" | "anthropic" | "none";
   teacherModel: string;
   llmDefaultMode:
@@ -79,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
   studentProvider: "ollama",
   studentModel: "llama3.2",
+  ollamaBaseUrl: "http://host.docker.internal:11434",
   teacherProvider: "none",
   teacherModel: "",
   llmDefaultMode: "student_only",

@@ -16,6 +16,21 @@ orchestrator.
 
 The teacher and the student are configured independently with
 `TEACHER_PROVIDER` / `TEACHER_MODEL` and `STUDENT_PROVIDER` / `STUDENT_MODEL`.
+The console Settings page can also save runtime overrides, including
+`OLLAMA_BASE_URL`, to `LLM_RUNTIME_CONFIG_PATH` and reload the LLM assistant
+providers without Docker socket access.
+
+For host Ollama, use `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+For Docker Ollama, start the optional service and pull the model:
+
+```powershell
+docker compose up -d ollama
+docker compose exec ollama ollama pull llama3.2:1b
+```
+
+Then set the runtime Ollama base URL to `http://ollama:11434`. The optional
+service maps host port `${OLLAMA_HOST_PORT:-11435}` to container port `11434`
+so it can coexist with a host Ollama already using `11434`.
 
 ## Routing modes
 
